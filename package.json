@@ -1,0 +1,45 @@
+{
+  "name": "verifiable-draws",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node ./server/index.js",
+    "dev": "nodemon ./server/index.js",
+    "deploy-contract-testnet": "npx hardhat run --network sepolia scripts/deployContract.js",
+    "deploy-contract-mainnet": "npx hardhat run --network mainnet scripts/deployContract.js",
+    "publish-draw-testnet": "npx hardhat run --network sepolia scripts/publishDraw.js",
+    "publish-draw-mainnet": "npx hardhat run --network mainnet scripts/publishDraw.js",
+    "size": "yarn run hardhat size-contracts",
+    "compile": "npx hardhat compile",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lancelot-c/verifiable-draws.git"
+  },
+  "author": "Lancelot Chardonnet",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lancelot-c/verifiable-draws/issues"
+  },
+  "homepage": "https://github.com/lancelot-c/verifiable-draws#readme",
+  "dependencies": {
+    "@chainlink/contracts": "^0.6.1",
+    "@openzeppelin/contracts": "^4.8.1",
+    "@pinata/sdk": "^2.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "ethers": "^5.7.2",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.2",
+    "@nomiclabs/hardhat-waffle": "^2.0.5",
+    "@remix-project/remixd": "^0.6.11",
+    "hardhat": "^2.12.7",
+    "hardhat-contract-sizer": "^2.8.0",
+    "hardhat-gas-reporter": "^1.0.9",
+    "nodemon": "^2.0.20"
+  }
+}
