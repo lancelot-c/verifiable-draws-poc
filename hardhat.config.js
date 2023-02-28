@@ -4,21 +4,23 @@ require("@nomiclabs/hardhat-ethers");
 require("@nomiclabs/hardhat-waffle");
 require('hardhat-contract-sizer');
 require("hardhat-gas-reporter");
-const { INFURA_TESTNET_API_URL, ALCHEMY_MAINNET_API_URL, PRIVATE_KEY } = process.env;
+const { INFURA_TESTNET_API_URL, INFURA_MAINNET_API_URL, WALLET_PRIVATE_KEY, COIN_MARKETCAP_API_KEY, HARDHAT_PRIVATE_KEY, ALCHEMY_TESTNET_API_URL } = process.env;
 
 
 module.exports = {
     defaultNetwork: "sepolia",
     networks: {
+        hardhat: {
+            accounts:  [{privateKey: `${HARDHAT_PRIVATE_KEY}`, balance: '1000000000000000000000'}]
+        },
         sepolia: {
-            gas: 30000000,
-            gasPrice: 8000000000,
+            chainId: 11155111,
             url      : INFURA_TESTNET_API_URL,
-            accounts : [`${PRIVATE_KEY}`]
+            accounts : [`${WALLET_PRIVATE_KEY}`]
         },
         mainnet: {
-            url      : ALCHEMY_MAINNET_API_URL,
-            accounts : [`${PRIVATE_KEY}`]
+            url      : INFURA_MAINNET_API_URL,
+            accounts : [`${WALLET_PRIVATE_KEY}`]
         }
     },
     solidity: {
@@ -33,5 +35,11 @@ module.exports = {
     contractSizer: {
         runOnCompile: false,
         strict: false,
+    },
+    gasReporter: {
+        enabled: true,
+        currency: "USD",
+        coinmarketcap: COIN_MARKETCAP_API_KEY || "",
+        token: "ETH"
     }
 }

@@ -6,8 +6,9 @@
   "scripts": {
     "start": "node ./server/index.js",
     "dev": "nodemon ./server/index.js",
-    "deploy-contract-testnet": "npx hardhat run --network sepolia scripts/deployContract.js",
-    "deploy-contract-mainnet": "npx hardhat run --network mainnet scripts/deployContract.js",
+    "deploy-contract-localhost": "npx hardhat run --network localhost scripts/deployContracts.js",
+    "deploy-contract-testnet": "npx hardhat run --network sepolia scripts/deployContracts.js",
+    "deploy-contract-mainnet": "npx hardhat run --network mainnet scripts/deployContracts.js",
     "publish-draw-testnet": "npx hardhat run --network sepolia scripts/publishDraw.js",
     "publish-draw-mainnet": "npx hardhat run --network mainnet scripts/publishDraw.js",
     "size": "yarn run hardhat size-contracts",

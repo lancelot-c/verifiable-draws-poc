@@ -1,47 +1,48 @@
 
 const hre = require('hardhat');
+const network = hre.network.name;
 const fs = require("fs");
 const os = require("os");
-const { CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID } = process.env;
+const { PRIMARY_CONTRACT_NAME, SECONDARY_CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID } = process.env;
 
-async function main() {
+async function deployAll() {
 
-    const networkName = hre.network.name;
+    const blip = await hre.ethers.provider.getBlockNumber();
+    console.log(`blip ${blip}`);
 
-    await deploy(networkName);
-        // .then(() => process.exit(0))
-        // .catch((error) => {
-        //     console.error(error);
-        //     process.exit(1);
-        // });
+    // const secondaryContractAddress = await deployOne(SECONDARY_CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID);
+    await deployOne(PRIMARY_CONTRACT_NAME, '0x055eccEE78509D938A7849495C8258fd24cB9aab');
 }
 
 
-async function deploy(networkName) {
+async function deployOne(contractName, args) {
 
     const [deployer] = await ethers.getSigners();
-    console.log(`Deploying contract ${CONTRACT_NAME} on ${networkName} with account ${deployer.address}`);
+    console.log(`\nDeploying...\nNetwork: ${network}\nAccount: ${deployer.address}\nContract: ${contractName}\nArgs: ${args}\n`);
 
-    const contractFactory = await hre.ethers.getContractFactory(CONTRACT_NAME);
-    const contract = await contractFactory.deploy(CHAINLINK_VRF_SUBSCRIPTION_ID);
+    const contractFactory = await hre.ethers.getContractFactory(contractName);
+    const contract = await contractFactory.deploy(args);
     await contract.deployed();
     
     const contractAddress = contract.address;
-    console.log(`${CONTRACT_NAME} deployed to address ${contractAddress}`)
-    syncContracts(networkName, contractAddress);
+    console.log(`${contractName} deployed to address ${contractAddress}`)
+    updateEnvFile(contractName, contractAddress);
+    return contractAddress;
 }
 
 /**
  *  Sync the ABI of the deployed contracts and set the environment variables to the correct addresses
- * @param {*} networkName 
  */
-const syncContracts = async (networkName, contractAddress) => {
+async function updateEnvFile(contractName, contractAddress) {
     const envLocation = '../.env';
-    const contractAddressVar = (networkName == 'mainnet') ? 'MAINNET_CONTRACT_ADDRESS' : 'TESTNET_CONTRACT_ADDRESS';
+    let contractAddressVar = (contractName == PRIMARY_CONTRACT_NAME) ? 'PRIMARY' : 'SECONDARY';
+    contractAddressVar += '_CONTRACT_';
+    contractAddressVar += (network == 'mainnet') ? 'MAINNET' : 'TESTNET';
+    contractAddressVar += '_ADDRESS';
 
     // Update environment variables
     await setEnvValue(contractAddressVar, contractAddress, envLocation);
-    console.log('.env updated for ', networkName);
+    console.log(`${contractAddressVar} = ${contractAddress}\n.env updated`);
     // updateABI();
 }
 
@@ -76,7 +77,7 @@ async function setEnvValue(key, value, envLocation) {
     fs.writeFileSync(envLocation, ENV_VARS.join(os.EOL));
 }
 
-main()
+deployAll()
     .then(() => process.exit(0))
     .catch((error) => {
         console.error(error)
