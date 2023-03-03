@@ -1,44 +1,52 @@
 const fs = require('fs');
-const { ethers } = require('ethers');
-const alchemyConfig = require("../config/alchemy.config.js");
-const abi = JSON.parse(fs.readFileSync('./app/assets/contracts/collections.json')).abi;
-const provider = new ethers.providers.JsonRpcProvider(alchemyConfig[alchemyConfig.selected].rpc.rpcUrl, alchemyConfig[alchemyConfig.selected].rpc.chainId);
-const contract = new ethers.Contract(alchemyConfig[alchemyConfig.selected].contracts.collections, abi, provider);
-
-
-const updateSupply = async (tokenId) => {
-    Asset.findByPk(tokenId).then((asset) => {
-        if (asset) {
-            contract.getTokenSupply(tokenId).then((response) => {
-                const supply = parseInt(BigInt(response[0]._hex))
-                let available = true;
-                if(supply === asset.max_supply){
-                    available = false;
-                }
-                asset.update({ total_supply: supply, available: available });
-            })            
-        }
-    })
-}
+const hre = require('hardhat');
+const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS } = process.env;
+const abi = JSON.parse(fs.readFileSync(`./artifacts/contracts/${CONTRACT_NAME}.sol/${CONTRACT_NAME}.json`)).abi;
+const provider = new hre.ethers.Wallet(WALLET_PRIVATE_KEY, hre.ethers.provider);
+const contract = new hre.ethers.Contract(
+    TESTNET_CONTRACT_ADDRESS,
+    abi,
+    provider
+);
 
 module.exports = {
 
     subscribeEvents: async () => {
-        console.log('subscribeEvents called for contracts:', alchemyConfig[alchemyConfig.selected].contracts.collections);
-        
-        contract.on("TransferSingle", (address, from, to, id, value) => {
-            const tokenId = parseInt(BigInt(id._hex));
-            console.log('TransferSingle event received', tokenId);
-            updateSupply(tokenId);
-        });
 
-        contract.on("TransferBatch", (address, from, to, ids, values) => {
-            for (let i = 0; i < ids.length; i++) {
-                const tokenId = parseInt(BigInt(ids[i]._hex));
-                console.log('TransferBatch event received', tokenId);
-                updateSupply(tokenId);
+        contract.on("DrawLaunched", (cid, publishedAt, scheduledAt, entropyNeeded) => {
+            let event = {
+                cid,
+                publishedAt,
+                scheduledAt,
+                entropyNeeded
             }
+            console.log('DrawLaunched 💥\n', JSON.stringify(event, null, 5))
         });
+        console.log('Subscribed to DrawLaunched');
+
+
+        contract.on("DrawsTriggered", (data) => {
+            console.log('DrawsTriggered 💥\n', data)
+        });
+        console.log('Subscribed to DrawsTriggered');
+
+
+        contract.on("RequestSent", (data) => {
+            console.log('RequestSent 💥\n', data)
+        });
+        console.log('Subscribed to RequestSent');
+
+
+        contract.on("RequestFulfilled", (data) => {
+            console.log('RequestFulfilled 💥\n', data)
+        });
+        console.log('Subscribed to RequestFulfilled');
+
+
+        contract.on("DrawCompleted", (data) => {
+            console.log('DrawCompleted 💥\n', data)
+        });
+        console.log('Subscribed to DrawCompleted');
     }
 
 };

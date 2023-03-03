@@ -1,9 +1,19 @@
+************************
+[✓] You are viewing a tamper-proof page. The data on this page cannot change. [Learn More]
+************************
+
 *** DESCRIPTION ***
 This is the first draw
-Wut wut !
+Wut wut !!!
 
 *** RULES ***
-See ipfs://qdhlfdslhf234
+we take one, the other lose !
+
+*** SCHEDULED AT TIMESTAMP (GMT) ***
+1677781972
+
+*** NUMBER OF WINNERS ***
+1
 
 *** PARTICIPANTS ***
 Lancelot Chardonnet

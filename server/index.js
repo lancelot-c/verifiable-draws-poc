@@ -2,6 +2,7 @@
 const dotenv = require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const { subscribeEvents } = require("../utils/events");
 
 
 // defining the Express app
@@ -27,5 +28,4 @@ app.listen(PORT, () => {
     console.log(`\nServer is running on port ${PORT}.\n`);
 });
 
-// const { subscribeEvents } = require("../utils/events");
-// subscribeEvents();
+subscribeEvents();

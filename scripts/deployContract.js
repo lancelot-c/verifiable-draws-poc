@@ -3,15 +3,11 @@ const hre = require('hardhat');
 const network = hre.network.name;
 const fs = require("fs");
 const os = require("os");
-const { PRIMARY_CONTRACT_NAME, SECONDARY_CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID } = process.env;
+const { CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID } = process.env;
 
 async function deployAll() {
-
-    const blip = await hre.ethers.provider.getBlockNumber();
-    console.log(`blip ${blip}`);
-
-    // const secondaryContractAddress = await deployOne(SECONDARY_CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID);
-    await deployOne(PRIMARY_CONTRACT_NAME, '0x055eccEE78509D938A7849495C8258fd24cB9aab');
+    
+    await deployOne(CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID);
 }
 
 
@@ -26,19 +22,17 @@ async function deployOne(contractName, args) {
     
     const contractAddress = contract.address;
     console.log(`${contractName} deployed to address ${contractAddress}`)
-    updateEnvFile(contractName, contractAddress);
+    updateEnvFile(contractAddress);
     return contractAddress;
 }
 
 /**
  *  Sync the ABI of the deployed contracts and set the environment variables to the correct addresses
  */
-async function updateEnvFile(contractName, contractAddress) {
-    const envLocation = '../.env';
-    let contractAddressVar = (contractName == PRIMARY_CONTRACT_NAME) ? 'PRIMARY' : 'SECONDARY';
-    contractAddressVar += '_CONTRACT_';
-    contractAddressVar += (network == 'mainnet') ? 'MAINNET' : 'TESTNET';
-    contractAddressVar += '_ADDRESS';
+async function updateEnvFile(contractAddress) {
+    const envLocation = './.env';
+    let contractAddressVar = (network == 'mainnet') ? 'MAINNET' : 'TESTNET';
+    contractAddressVar += '_CONTRACT_ADDRESS';
 
     // Update environment variables
     await setEnvValue(contractAddressVar, contractAddress, envLocation);
@@ -73,7 +67,7 @@ async function setEnvValue(key, value, envLocation) {
     const target = ENV_VARS.indexOf(ENV_VARS.find((line) => {
         return line.match(new RegExp(key));
     }));
-    ENV_VARS.splice(target, 1, `${key}='${value}'`);
+    ENV_VARS.splice(target, 1, `${key} = '${value}'`);
     fs.writeFileSync(envLocation, ENV_VARS.join(os.EOL));
 }
 
