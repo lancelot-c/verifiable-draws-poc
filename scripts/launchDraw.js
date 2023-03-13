@@ -2,8 +2,8 @@ const hre = require('hardhat');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const bs58 = require('bs58');
 const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS, PINATA_JWT } = process.env;
+const { getBytes32FromIpfsHash } = require("../utils/ipfs");
 const pinataSDK = require('@pinata/sdk');
 const pinata = new pinataSDK({ pinataJWTKey: PINATA_JWT });
 const abi = JSON.parse(fs.readFileSync(`./artifacts/contracts/${CONTRACT_NAME}.sol/${CONTRACT_NAME}.json`)).abi;
@@ -101,7 +101,7 @@ async function computeEntropyNeeded(nbParticipants, nbWinners) {
     let entropyNeeded = 0;
 
     for (let i = 0; i < nbWinners; i++) {
-        entropyNeeded += Math.ceil(Math.log2(nbParticipants - i));
+        entropyNeeded += Math.ceil(Math.log2(nbParticipants - i) / 8); // in bytes
     }
 
     console.log(`${entropyNeeded} bytes of entropy needed`);
@@ -116,43 +116,22 @@ async function launchDraw(ipfsCidBytes32, scheduledAt, entropyNeeded) {
 }
 
 async function triggerDraw(ipfsCidBytes32) {
-    const performUpkeep = await contract.performUpkeep(ipfsCidBytes32);
+    const abi = ethers.utils.defaultAbiCoder;
+    const params = abi.encode(
+        ["bytes32[]"],
+        [ [ipfsCidBytes32] ]
+    );
+    const performUpkeep = await contract.performUpkeep(params);
     await performUpkeep.wait();
 
     console.log(`performUpkeep call done`);
 }
 
-
-// Return bytes32 hex string from base58 encoded ipfs hash,
-// stripping leading 2 bytes from 34 byte IPFS hash
-// Assume IPFS defaults: function:0x12=sha2, size:0x20=256 bits
-// E.g. "QmNSUYVKDSvPUnRLKmuxk9diJ6yS96r1TrAXzjTiBcCLAL" -->
-// "0x017dfd85d4f6cb4dcd715a88101f7b1f06cd1e009b2327a0809d01eb9c91f231"
-
-function getBytes32FromIpfsHash(ipfsListing) {
-    return "0x" + bs58.decode(ipfsListing).slice(2).toString('hex');
-}
-
-// Return base58 encoded ipfs hash from bytes32 hex string,
-// E.g. "0x017dfd85d4f6cb4dcd715a88101f7b1f06cd1e009b2327a0809d01eb9c91f231"
-// --> "QmNSUYVKDSvPUnRLKmuxk9diJ6yS96r1TrAXzjTiBcCLAL"
-
-function getIpfsHashFromBytes32(bytes32Hex) {
-    // Add our default ipfs values for first 2 bytes:
-    // function:0x12=sha2, size:0x20=256 bits
-    // and cut off leading "0x"
-    const hashHex = "1220" + bytes32Hex.slice(2);
-    const hashBytes = Buffer.from(hashHex, 'hex');
-    const hashStr = bs58.encode(hashBytes);
-    return hashStr;
-}
-
-
 function isNumeric(str) {
-    if (typeof str != "string") return false // we only process strings!  
+    if (typeof str != "string") return false; // we only process strings!  
     return !isNaN(str) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
-           !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
-  }
+        !isNaN(parseFloat(str)); // ...and ensure strings of whitespace fail
+}
 
 
 main()

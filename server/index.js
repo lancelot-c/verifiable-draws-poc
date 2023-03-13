@@ -2,7 +2,7 @@
 const dotenv = require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { subscribeEvents } = require("../utils/events");
+const { subscribeEvents } = require("./events");
 
 
 // defining the Express app

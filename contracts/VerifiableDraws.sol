@@ -22,7 +22,8 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint64 publishedAt; // block number at which the draw was published on the contract
         uint64 scheduledAt; // timestamp at which the draw should be triggered
         uint256 occuredAt; // block number at which the draw has occurred
-        uint32 entropyNeeded; // number of bits of information needed to compute winners
+        uint32 entropyNeeded; // number of bytes of information needed to compute winners
+        bool entropyPending;
         bytes entropy; // entropy used to pick winners
         bool completed;
     }
@@ -102,7 +103,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint64 publishedAt = uint64(block.number);
         uint256 occuredAt = 0;
         bytes memory entropy = "";
-        draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, entropyNeeded, entropy, false);
+        draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, entropyNeeded, false, entropy, false);
         pendingDraws.push(cid);
         emit DrawLaunched(cid, publishedAt, scheduledAt, entropyNeeded);
     }
@@ -121,7 +122,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
         for (uint64 i = 0; i < pendingDraws.length; i++) {
             bytes32 cid = pendingDraws[i];
-            if (block.timestamp >= draws[cid].scheduledAt) {
+            if (block.timestamp >= draws[cid].scheduledAt && !draws[cid].entropyPending) {
                 if (!upkeepNeeded) {
                     upkeepNeeded = true;
                 }
@@ -186,10 +187,12 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint32 totalEntropyNeeded = 0;
         for (uint64 i = 0; i < triggerDraws.length; i++) {
             totalEntropyNeeded += draws[triggerDraws[i]].entropyNeeded;
+            draws[triggerDraws[i]].entropyPending = true;
         }
  
         // Each word gives an entropy of 256 bits (see _randomWords in fulfillRandomWords)
-        uint32 entropyPerWord = 256;
+        // i.e. 32 bytes
+        uint32 entropyPerWord = 32;
         // Number of random words to generate
         uint32 numWords = divisionRoundUp(totalEntropyNeeded, entropyPerWord);
 
@@ -233,21 +236,20 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         emit RequestFulfilled(_requestId, _randomWords);
 
         bytes memory totalEntropy = abi.encodePacked(_randomWords);
-        bytes[] memory extractedEntropies = new bytes[](request.cids.length);
         uint32 from = 0;
+        uint32 bytesNeeded = 0;
 
         for (uint64 i = 0; i < request.cids.length; i++) {
             bytes32 cid = request.cids[i];
 
             if (draws[cid].completed == false) {
 
-                uint32 n = draws[cid].entropyNeeded;
-                bytes memory extractedEntropy = extractBytes(totalEntropy, from, n);
-                extractedEntropies[i] = extractedEntropy;
+                bytesNeeded = draws[cid].entropyNeeded;
+                bytes memory extractedEntropy = extractBytes(totalEntropy, from, bytesNeeded);
                 draws[cid].entropy = extractedEntropy;
                 draws[cid].occuredAt = block.number;
                 draws[cid].completed = true;
-                from += n;
+                from += bytesNeeded;
                 removePending(cid);
                 emit DrawCompleted(cid, draws[cid].entropy);
             }
