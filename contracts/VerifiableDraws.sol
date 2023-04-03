@@ -265,6 +265,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return (request.fulfilled, request.randomWords);
     }
 
+    function getEntropy(bytes32 cid) external view returns (bytes memory) {
+        return draws[cid].entropy;
+    }
+
     // Division rounds down by default in Solidity, this function rounds up
     function divisionRoundUp(uint32 a, uint32 m) private pure returns (uint32) {
         return (a + m - 1) / m;
