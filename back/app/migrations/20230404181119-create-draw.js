@@ -20,7 +20,7 @@ module.exports = {
       },
       participants: {
         allowNull: false,
-        type: Sequelize.JSON
+        type: Sequelize.ARRAY(Sequelize.STRING)
       },
       createdAt: {
         allowNull: false,

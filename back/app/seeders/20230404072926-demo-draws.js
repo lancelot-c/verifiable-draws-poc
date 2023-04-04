@@ -17,9 +17,7 @@ module.exports = {
 			"cid": "bafybeidi32pvwvfwjtzrtzuhiqqapqcdhy3xjwfrtldaxiaze34gdbuwuq",
 			"rules": "Blip",
 			"winnerSelection": "Bloup",
-			"participants": {
-
-			},
+			"participants": ["lancelot", "guillaume", "louis"],
             "createdAt": new Date(),
             "scheduledAt": new Date()
 		}
