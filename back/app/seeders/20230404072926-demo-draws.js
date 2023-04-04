@@ -18,8 +18,9 @@ module.exports = {
 			"rules": "Blip",
 			"winnerSelection": "Bloup",
 			"participants": ["lancelot", "guillaume", "louis"],
+            "scheduledAt": new Date(),
             "createdAt": new Date(),
-            "scheduledAt": new Date()
+            "updatedAt": new Date()
 		}
 	];
 

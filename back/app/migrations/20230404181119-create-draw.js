@@ -22,12 +22,17 @@ module.exports = {
         allowNull: false,
         type: Sequelize.ARRAY(Sequelize.STRING)
       },
+      scheduledAt: {
+        allowNull: false,
+        type: Sequelize.DATE,
+        defaultValue: new Date()
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
         defaultValue: new Date()
       },
-      scheduledAt: {
+      updatedAt: {
         allowNull: false,
         type: Sequelize.DATE,
         defaultValue: new Date()
