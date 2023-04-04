@@ -2,6 +2,7 @@
 const dotenv = require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const db = require("../app/models");
 const { subscribeEvents } = require("./events");
 
 
@@ -20,7 +21,9 @@ var corsOptions = {
 };
 app.use(cors(corsOptions));
 
-
+db.sequelize.sync({ alter: true }).then(() => {
+    console.log(`\nDb is synced with models.\n`);
+});
 
 // starting the server
 const PORT = process.env.PORT || 8080;
