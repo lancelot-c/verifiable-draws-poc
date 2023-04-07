@@ -40,3 +40,6 @@ const meta = ref<Meta>({
   totalCount: 1200
 });
 </script>
+
+<style scoped>
+</style>
