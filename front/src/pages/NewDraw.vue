@@ -11,12 +11,11 @@
 
 
                 <q-step :name="1" title="Draw title and rules" icon="settings" :done="step > 1" :header-nav="step > 1 && step != 4">
-                    <q-input outlined v-model="title" class="q-my-lg" label="Title" placeholder="2026 FIFA World Cup Draw"
+                    <q-input outlined v-model="drawTitle" class="q-my-lg" label="Title" :placeholder="titlePlaceholder"
                         :rules="[val => !!val || 'Field is required']" />
 
-                    <q-input v-model="rules" outlined class="q-my-lg" type="textarea" label="Rules"
-                        placeholder="All participating nations will be drawn to make an ordered list.
-    The first 3 nations from the list will form the group A, the following 3 nations will form the group B, etc... until no nation remain." :rules="[val => !!val || 'Field is required']" />
+                    <q-input v-model="drawRules" outlined class="q-my-lg" type="textarea" label="Rules"
+                        :placeholder="rulesPlaceholder" :rules="[val => !!val || 'Field is required']" />
 
                     <q-stepper-navigation>
                         <q-btn @click="() => { done1 = true; step = 2; }" color="primary" label="Continue" />
@@ -30,11 +29,11 @@
                         <q-option-group :options="options" type="radio" v-model="participantsRetrieval" />
                     </div>
 
-                    <q-input v-model="participants" outlined class="q-my-lg" type="textarea" label="List of participants"
+                    <q-input v-model="drawParticipants" outlined class="q-my-lg" type="textarea" label="List of participants"
                         :placeholder="participantsPlaceholder" :rules="[val => !!val || 'Field is required']" />
 
-                    <q-input v-model="nbWinners" type="number" outlined class="q-my-lg"
-                        label="Number of participants to draw" placeholder="48" style="max-width: 300px" />
+                    <q-input v-model="drawNbWinners" type="number" outlined class="q-my-lg"
+                        label="Number of participants to draw" :placeholder="nbWinnersPlaceholder" style="max-width: 300px" />
 
                     <q-stepper-navigation>
                         <q-btn @click="() => { done2 = true; step = 3; }" color="primary" label="Continue" />
@@ -49,12 +48,12 @@
                     </p>
 
                     <div class="row justify-evenly">
-                        <q-date v-model="scheduledAtDate" :options="dateOptionsFn" now-btn class="q-my-lg" />
-                        <q-time v-model="scheduledAtTime" :options="timeOptionsFn" class="q-my-lg" />
+                        <q-date v-model="drawScheduledAtDate" :options="dateOptionsFn" now-btn class="q-my-lg" />
+                        <q-time v-model="drawScheduledAtTime" :options="timeOptionsFn" class="q-my-lg" />
                     </div>
 
                     <q-stepper-navigation>
-                        <q-btn @click="() => { done3 = true; step = 4; }" color="primary" label="Continue" />
+                        <q-btn @click="deployDraw" color="primary" label="Deploy" />
                         <q-btn flat @click="step = 2" color="primary" label="Back" class="q-ml-sm" />
                     </q-stepper-navigation>
                 </q-step>
@@ -71,7 +70,7 @@
                         <q-btn round unelevated icon="content_copy" @click="copyIPFSLinkToClipboard()" />
                     </div>
                     <p class="text-center q-my-lg">
-                        In order for the draw to be valid you MUST share this link before <span class="text-underline">{{ scheduledAtDate }} {{ scheduledAtTime }}</span>.
+                        In order for the draw to be valid you MUST share this link before <span class="text-underline">{{ drawScheduledAtDate }} {{ drawScheduledAtTime }}</span>.
                     </p>
                     <p class="text-center q-my-lg">
                         You can alternatively share this QR code which is the strict equivalent of the above link:
@@ -98,6 +97,7 @@
 </template>
 
 <script setup lang="ts">
+import DrawService from 'src/services/DrawService';
 import { date } from 'quasar';
 import { ref } from 'vue';
 
@@ -106,16 +106,22 @@ const done2 = ref(false);
 const done3 = ref(false);
 const done4 = ref(false);
 const step = ref(3);
-const title = ref('');
-const rules = ref('');
+
+const titlePlaceholder = '2026 FIFA World Cup Draw';
+const drawTitle = ref(titlePlaceholder);
+
+const rulesPlaceholder = `All participating nations will be drawn to make an ordered list.
+The first 3 nations from the list will form the group A, the following 3 nations will form the group B, etc... until no nation remain.`;
+const drawRules = ref(rulesPlaceholder);
+
 const participantsRetrieval = ref('manual');
 let options = [
     { label: 'Manually type the list of participants', value: 'manual' },
     { label: 'Retrieve the list of participants from social media (Youtube, Instagram, Twitter, TikTok, LinkedIn)', value: 'socialMedia', disable: true },
     { label: 'Upload the list of participants from a .csv or .txt file', value: 'file', disable: true }
 ];
-const participants = ref('');
-const participantsPlaceholder = ref(`Argentina
+
+const participantsPlaceholder = `Argentina
 Brazil
 England
 France
@@ -145,37 +151,61 @@ Costa Rica
 Tunisia
 Saudi Arabia
 Iran
-Ecuador`);
-const nbWinners = ref();
-const ipfsLink = 'ipfs://bafybeidi32pvwvfwjtzrtzuhiqqapqcdhy3xjwfrtldaxiaze34gdbuwuq';
+Ecuador`;
+const drawParticipants = ref(participantsPlaceholder);
+const nbWinnersPlaceholder = '48';
+const drawNbWinners = ref(nbWinnersPlaceholder);
 
-let minimumScheduledAt = date.addToDate(Date.now(), { minutes: 0 });
-const scheduledAtDate = ref(date.formatDate(minimumScheduledAt, 'YYYY/MM/DD'));
-const scheduledAtTime = ref(date.formatDate(minimumScheduledAt, 'HH:mm'));
+const ipfsLink = ref('ipfs://bafybeidi32pvwvfwjtzrtzuhiqqapqcdhy3xjwfrtldaxiaze34gdbuwuq');
+
+const minimumScheduledAt = ref(date.addToDate(Date.now(), { minutes: 0 }));
+const drawScheduledAtDate = ref(date.formatDate(minimumScheduledAt.value, 'YYYY/MM/DD'));
+const drawScheduledAtTime = ref(date.formatDate(minimumScheduledAt.value, 'HH:mm'));
 
 function dateOptionsFn(d: string) {
-    minimumScheduledAt = date.addToDate(Date.now(), { minutes: 0 });
-    const minimumDate = date.formatDate(minimumScheduledAt, 'YYYY/MM/DD');
+    minimumScheduledAt.value = date.addToDate(Date.now(), { minutes: 0 });
+    const minimumDate = date.formatDate(minimumScheduledAt.value, 'YYYY/MM/DD');
 
     return d >= minimumDate;
 }
 
 function timeOptionsFn(hr: number, min: number | null) {
-    minimumScheduledAt = date.addToDate(Date.now(), { minutes: 0 });
-    const minimumHr = Number(date.formatDate(minimumScheduledAt, 'HH'));
-    const minimumMin = Number(date.formatDate(minimumScheduledAt, 'mm'));
+    minimumScheduledAt.value = date.addToDate(Date.now(), { minutes: 0 });
+    const minimumHr = Number(date.formatDate(minimumScheduledAt.value, 'HH'));
+    const minimumMin = Number(date.formatDate(minimumScheduledAt.value, 'mm'));
 
     return hr > minimumHr || (hr == minimumHr && min != null && min >= minimumMin);
 }
 
 function copyIPFSLinkToClipboard() {
-    navigator.clipboard.writeText(ipfsLink).then(() => {
+    navigator.clipboard.writeText(ipfsLink.value).then(() => {
         console.log('Async: Copying to clipboard was successful!');
     }, (err) => {
         console.error('Async: Could not copy text: ', err);
     });
 }
 
+function deployDraw() {
+
+    const year = Number(date.formatDate(drawScheduledAtDate.value, 'YYYY'));
+    const month = Number(date.formatDate(drawScheduledAtDate.value, 'MM'));
+    const day = Number(date.formatDate(drawScheduledAtDate.value, 'DD'));
+    const hour = Number(drawScheduledAtTime.value.split(':')[0]);
+    const minute = Number(drawScheduledAtTime.value.split(':')[1]);
+    const second = 0;
+    const drawScheduledAt = date.buildDate({ year, month, day, hour, minute, second });
+    const drawScheduledAtTimestamp = Number(date.formatDate(drawScheduledAt, 'X'));
+    
+    return DrawService.create(drawTitle.value, drawRules.value, drawParticipants.value, drawNbWinners.value, drawScheduledAtTimestamp)
+            .then(response => {
+                done3.value = true;
+                step.value = 4;
+            })
+            .catch(error => {
+                console.log(error);
+            });
+
+}
 </script>
 
 <style scoped>

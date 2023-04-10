@@ -96,8 +96,13 @@ module.exports = configure(function (/* ctx */) {
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#devServer
     devServer: {
-      // https: true
-      open: true // opens browser window automatically
+        /* Comment below block to serve the frontend on http instead of https */
+        //   https: {
+        //     key: readFileSync('./.cert/key.pem'),
+        //     cert: readFileSync('./.cert/cert.pem'),
+        //   },
+  
+        open: false, // opens browser window automatically
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#framework

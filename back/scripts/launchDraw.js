@@ -1,7 +1,9 @@
 const hre = require('hardhat');
 const fs = require('fs');
+const fsPromises = fs.promises;
 const path = require('path');
 const readline = require('readline');
+const { createHash } = require('crypto');
 const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS, PINATA_JWT } = process.env;
 const { getBytes32FromIpfsHash } = require("../utils/ipfs");
 const pinataSDK = require('@pinata/sdk');
@@ -16,34 +18,86 @@ const contract = new hre.ethers.Contract(
 
 async function main() {
 
-    // Location of the file containing the draw specs
-    const drawFilename = process.env.npm_config_draw;
-    if (!drawFilename) {
-        throw Error('You need to specify a draw');
-    }
-    const drawFilepath = `./draws/${drawFilename}.txt`;
+    // Extract draws infos
+    const drawTitle = process.env.npm_config_drawTitle;
+    const drawRules = process.env.npm_config_drawRules;
+    const drawParticipants = process.env.npm_config_drawParticipants;
+    const drawNbWinners = process.env.npm_config_drawNbWinners;
+    const drawScheduledAt = process.env.npm_config_drawScheduledAt;
 
+
+    await launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
+
+}
+
+async function launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt) {
     try {
 
-        // Pin draw on IPFS
+        console.log(`drawTitle = \n"${drawTitle}"\n\n`);
+        console.log(`drawRules = \n"${drawRules}"\n\n`);
+        console.log(`drawParticipants = \n"${drawParticipants}"\n\n`);
+        console.log(`drawNbWinners = \n"${drawNbWinners}"\n\n`);
+        console.log(`drawScheduledAt = \n"${drawScheduledAt}"\n\n`);
+
+        if (!drawTitle || !drawRules || !drawParticipants || !drawNbWinners || !drawScheduledAt) {
+            throw Error('You need to specify all draw parameters.');
+        }
+
+        // Generate draw file
+        const drawFilepath = await generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
+        console.log(`drawFilepath = ${drawFilepath}`);
+
+        // Pin draw file on IPFS
         const [ipfsCidString, ipfsCidBytes32] = await pinOnIPFS(drawFilepath);
 
-        // Extract draws infos
-        const [scheduledAt, nbWinners, nbParticipants] = await extractDrawInfos(drawFilepath);
+        // Rename draw file to match IPFS CID
+        await renameFileToIPFS_CID(drawFilepath, ipfsCidString);
 
-        // Computing entropy needed
-        const entropyNeeded = await computeEntropyNeeded(nbParticipants, nbWinners);
+        // // Compute entropy needed
+        const drawNbParticipants = drawParticipants.length;
+        const entropyNeeded = await computeEntropyNeeded(drawNbParticipants, drawNbWinners);
 
-        // Publish draw on smart contract
-        await launchDraw(ipfsCidBytes32, scheduledAt, entropyNeeded);
+        // // Publish draw on smart contract
+        // await publishOnSmartContract(ipfsCidBytes32, drawScheduledAt, entropyNeeded);
 
-        // We trigger the draw right away
-        await triggerDraw(ipfsCidBytes32);
-        
+        // // Trigger the draw right away
+        // await triggerDraw(ipfsCidBytes32);
+
     } catch (err) {
         console.error(err);
     }
+}
 
+async function generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWinners, unix_timestamp) {
+    const templateFilepath = './draws/template.html';
+
+    const content = await fsPromises.readFile(templateFilepath, 'utf8');
+
+    let date = new Date(unix_timestamp * 1000);
+    drawScheduledAt = `Draw scheduled on ${date.toGMTString()}`;
+    // April 27, 2023 at 8am (UTC+1)
+
+    drawParticipants = drawParticipants.split('\n');
+    drawParticipantsList = `<li>${drawParticipants.join('</li><li>')}</li>`;
+
+    // Replace placeholders with draw parameters
+    const newContent = content.replaceAll('{{ drawTitle }}', drawTitle)
+        .replaceAll('{{ drawScheduledAt }}', drawScheduledAt)
+        .replaceAll('{{ drawRules }}', drawRules.replaceAll('\n', '<br />'))
+        .replaceAll('{{ drawNbParticipants }}', drawParticipants.length)
+        .replaceAll('{{ drawParticipants }}', drawParticipantsList);
+
+    const fileHash = sha256(newContent);
+    drawTempFilepath = `./draws/${fileHash}.html`;
+
+    await fsPromises.writeFile(drawTempFilepath, newContent, 'utf8');
+    console.log('sdfdfd');
+    return drawTempFilepath;
+
+}
+
+function sha256(message) {
+    return Buffer.from(createHash('sha256').update(message).digest('hex')).toString('base64');
 }
 
 async function pinOnIPFS(filepath) {
@@ -59,45 +113,21 @@ async function pinOnIPFS(filepath) {
     return [ipfsCidString, ipfsCidBytes32];
 }
 
-async function extractDrawInfos(drawFilepath) {
-    let scheduledAt = Math.floor(Date.now()/1000) + 60; // Scheduled in 1min by default
-    let nbWinners = 1; // 1 winner by default
-    let nbParticipants = 0;
-    let nextLineIsScheduledDate = false;
-    let nextLineIsNbWinners = false;
-    let nextLineIsParticipant = false;
-    const rl = readline.createInterface({
-        input: fs.createReadStream(drawFilepath),
-        output: process.stdout,
-        terminal: false
-    });
+async function renameFileToIPFS_CID(drawFilepath, ipfsCidString) {
+    const newFilepath = drawFilepath.replace(path.basename(drawFilepath), `${ipfsCidString}.html`);
 
-    for await (const line of rl) {
-        if (nextLineIsScheduledDate && isNumeric(line)) {
-            scheduledAt = parseInt(line);
-            nextLineIsScheduledDate = false;
-        } else if (nextLineIsNbWinners && isNumeric(line)) {
-            nbWinners = parseInt(line);
-            nextLineIsNbWinners = false;
-        } else if (nextLineIsParticipant) {
-            nbParticipants++;
-        } else if (line === '*** SCHEDULED AT TIMESTAMP (GMT) ***') {
-            nextLineIsScheduledDate = true;
-        } else if (line === '*** NUMBER OF WINNERS ***') {
-            nextLineIsNbWinners = true;
-        } else if (line === '*** PARTICIPANTS ***') {
-            nextLineIsParticipant = true;
+    fs.rename(drawFilepath, newFilepath, (err) => {
+        if (err) {
+            console.error(err);
+            return 0;
+        } else {
+            return newFilepath;
         }
-    }
-
-    console.log(`Draw scheduled at timestamp (GMT): ${scheduledAt}`);
-    console.log(`${nbWinners} winner needed`);
-    console.log(`${nbParticipants} participants detected`);
-    return [scheduledAt, nbWinners, nbParticipants];
+    });
 }
 
 async function computeEntropyNeeded(nbParticipants, nbWinners) {
-    
+
     let entropyNeeded = 0;
 
     for (let i = 0; i < nbWinners; i++) {
@@ -108,7 +138,7 @@ async function computeEntropyNeeded(nbParticipants, nbWinners) {
     return entropyNeeded;
 }
 
-async function launchDraw(ipfsCidBytes32, scheduledAt, entropyNeeded) {
+async function publishOnSmartContract(ipfsCidBytes32, scheduledAt, entropyNeeded) {
     const launchDraw = await contract.launchDraw(ipfsCidBytes32, scheduledAt, entropyNeeded);
     await launchDraw.wait();
 
@@ -119,7 +149,7 @@ async function triggerDraw(ipfsCidBytes32) {
     const abi = ethers.utils.defaultAbiCoder;
     const params = abi.encode(
         ["bytes32[]"],
-        [ [ipfsCidBytes32] ]
+        [[ipfsCidBytes32]]
     );
     const performUpkeep = await contract.performUpkeep(params);
     await performUpkeep.wait();
@@ -134,9 +164,12 @@ function isNumeric(str) {
 }
 
 
-main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-        console.error(error)
-        process.exit(1)
-    });
+// main()
+//     .then(() => process.exit(0))
+//     .catch((error) => {
+//         console.error(error)
+//         process.exit(1)
+//     });
+
+
+module.exports = { launchDraw };

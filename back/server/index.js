@@ -5,6 +5,8 @@ const cors = require("cors");
 const db = require("../app/models");
 const { subscribeEvents } = require("./events");
 
+// importing routes
+const drawRoutes = require("./../app/routes/draw");
 
 // defining the Express app
 const app = express();
@@ -24,6 +26,13 @@ app.use(cors(corsOptions));
 db.sequelize.sync({ alter: true }).then(() => {
     console.log(`\nDb is synced with models.\n`);
 });
+
+// Routing
+app.get("/api", (req, res) => {
+    res.json({ message: `\nWelcome !\n` });
+});
+
+app.use("/api/draw", drawRoutes);
 
 // starting the server
 const PORT = process.env.PORT || 8080;
