@@ -5,12 +5,10 @@
 
             <h4 class="text-center">Create a verifiable draw</h4>
 
-            <!-- <q-separator inset class="q-my-lg" /> -->
-
             <q-stepper v-model="step" ref="stepper" color="primary" header-nav animated flat>
 
 
-                <q-step :name="1" title="Draw title and rules" icon="settings" :done="step > 1" :header-nav="step > 1 && step != 4">
+                <q-step :name="1" title="Draw title and rules" icon="settings" :done="step > 1" :header-nav="step > 1 && step != 4 && !loading">
                     <q-input outlined v-model="drawTitle" class="q-my-lg" label="Title" :placeholder="titlePlaceholder"
                         :rules="[val => !!val || 'Field is required']" />
 
@@ -18,12 +16,12 @@
                         :placeholder="rulesPlaceholder" :rules="[val => !!val || 'Field is required']" />
 
                     <q-stepper-navigation>
-                        <q-btn @click="() => { done1 = true; step = 2; }" color="primary" label="Continue" />
+                        <q-btn @click="() => { step = 2; }" color="primary" label="Continue" />
                     </q-stepper-navigation>
                 </q-step>
 
 
-                <q-step :name="2" title="Participants" icon="group" :done="step > 2" :header-nav="step > 2 && step != 4">
+                <q-step :name="2" title="Participants" icon="group" :done="step > 2" :header-nav="step > 2 && step != 4 && !loading">
                     How do you want to retrieve the list of participants ?
                     <div class="q-gutter-sm q-my-lg">
                         <q-option-group :options="options" type="radio" v-model="participantsRetrieval" />
@@ -36,13 +34,13 @@
                         label="Number of participants to draw" :placeholder="nbWinnersPlaceholder" style="max-width: 300px" />
 
                     <q-stepper-navigation>
-                        <q-btn @click="() => { done2 = true; step = 3; }" color="primary" label="Continue" />
+                        <q-btn @click="() => { step = 3; }" color="primary" label="Continue" />
                         <q-btn flat @click="step = 1" color="primary" label="Back" class="q-ml-sm" />
                     </q-stepper-navigation>
                 </q-step>
 
 
-                <q-step :name="3" title="Scheduled date and time" icon="event" :done="step > 3" :header-nav="step > 3 && step != 4">
+                <q-step :name="3" title="Scheduled date and time" icon="event" :done="step > 3" :header-nav="step > 3 && step != 4 && !loading">
                     <p class="text-center q-my-lg">
                         The draw must be scheduled at least 5 minutes from the current date and time. We enforce this constraint in order to let you have the time to share the draw link with the participants before the draw is triggered.
                     </p>
@@ -53,19 +51,19 @@
                     </div>
 
                     <q-stepper-navigation>
-                        <q-btn @click="deployDraw" color="primary" label="Deploy" />
-                        <q-btn flat @click="step = 2" color="primary" label="Back" class="q-ml-sm" />
+                        <q-btn @click="deployDraw" color="primary" label="Deploy" :loading="loading" :disable="loading" />
+                        <q-btn flat @click="step = 2" color="primary" label="Back" class="q-ml-sm" :disable="loading" />
                     </q-stepper-navigation>
                 </q-step>
 
 
-                <q-step :name="4" title="Share the draw" icon="sms" :done="step > 4" :header-nav="step > 4">
+                <q-step :name="4" title="Share the draw" icon="sms" :done="step > 4" :header-nav="false">
                     <p class="text-center q-my-lg">
                         Your draw was successfully deployed on IPFS and Ethereum !<br />
                         Now copy and share the following link on your main communication platform:
                     </p>
                     <div class="ipfs-card row justify-center items-center">
-                        <p class="ipfs-card__cid q-mb-none q-mr-lg">{{ ipfsLink }}</p>
+                        <p class="ipfs-card__cid q-mb-none q-mr-lg">verify.win/{{ ipfsCid }}</p>
                         <!-- <q-icon name="content_copy" /> -->
                         <q-btn round unelevated icon="content_copy" @click="copyIPFSLinkToClipboard()" />
                     </div>
@@ -80,11 +78,11 @@
                             src="./../assets/qr-code.png"
                             style="width: 300px"
                             />
-                        <!-- <q-btn round unelevated icon="content_copy" @click="copyIPFSLinkToClipboard()" /> -->
+                        <q-btn round unelevated icon="download" @click="downloadQrCode()" class="q-ml-lg" />
                     </div>
                     
                     <q-stepper-navigation>
-                        <q-btn color="primary" @click="done4 = true" label="Finish" />
+                        <q-btn color="primary" @click="reset" label="Finish" />
                     </q-stepper-navigation>
                 </q-step>
 
@@ -101,11 +99,8 @@ import DrawService from 'src/services/DrawService';
 import { date } from 'quasar';
 import { ref } from 'vue';
 
-const done1 = ref(false);
-const done2 = ref(false);
-const done3 = ref(false);
-const done4 = ref(false);
 const step = ref(3);
+const loading = ref(false);
 
 const titlePlaceholder = '2026 FIFA World Cup Draw';
 const drawTitle = ref(titlePlaceholder);
@@ -156,7 +151,7 @@ const drawParticipants = ref(participantsPlaceholder);
 const nbWinnersPlaceholder = '48';
 const drawNbWinners = ref(nbWinnersPlaceholder);
 
-const ipfsLink = ref('ipfs://bafybeidi32pvwvfwjtzrtzuhiqqapqcdhy3xjwfrtldaxiaze34gdbuwuq');
+const ipfsCid = ref('');
 
 const minimumScheduledAt = ref(date.addToDate(Date.now(), { minutes: 0 }));
 const drawScheduledAtDate = ref(date.formatDate(minimumScheduledAt.value, 'YYYY/MM/DD'));
@@ -178,15 +173,25 @@ function timeOptionsFn(hr: number, min: number | null) {
 }
 
 function copyIPFSLinkToClipboard() {
-    navigator.clipboard.writeText(ipfsLink.value).then(() => {
+    navigator.clipboard.writeText(`http://localhost:9000/draw/${ipfsCid.value}`).then(() => {
         console.log('Async: Copying to clipboard was successful!');
     }, (err) => {
         console.error('Async: Could not copy text: ', err);
     });
 }
 
-function deployDraw() {
+function downloadQrCode() {
+    let link = document.createElement('a');
+    link.href = 'http://localhost:9000/src/assets/qr-code.png';
+    link.download = 'qr-code.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 
+async function deployDraw() {
+
+    loading.value = true;
     const year = Number(date.formatDate(drawScheduledAtDate.value, 'YYYY'));
     const month = Number(date.formatDate(drawScheduledAtDate.value, 'MM'));
     const day = Number(date.formatDate(drawScheduledAtDate.value, 'DD'));
@@ -196,15 +201,15 @@ function deployDraw() {
     const drawScheduledAt = date.buildDate({ year, month, day, hour, minute, second });
     const drawScheduledAtTimestamp = Number(date.formatDate(drawScheduledAt, 'X'));
     
-    return DrawService.create(drawTitle.value, drawRules.value, drawParticipants.value, drawNbWinners.value, drawScheduledAtTimestamp)
-            .then(response => {
-                done3.value = true;
-                step.value = 4;
-            })
-            .catch(error => {
-                console.log(error);
-            });
+    const createdDraw = await DrawService.create(drawTitle.value, drawRules.value, drawParticipants.value, drawNbWinners.value, drawScheduledAtTimestamp);
 
+    ipfsCid.value = createdDraw.data.ipfsCidString;
+    step.value = 4;
+    loading.value = false;
+}
+
+function reset() {
+    step.value = 1;
 }
 </script>
 
@@ -217,7 +222,7 @@ function deployDraw() {
     background-color: #f3f3f3;
     border-radius: 4px;
     padding: 8px;
-    font-size: 1.4em;
+    font-size: 1.6em;
 }
 
 .text-underline {

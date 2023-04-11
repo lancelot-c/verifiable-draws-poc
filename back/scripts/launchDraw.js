@@ -63,6 +63,8 @@ async function launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners,
         // // Trigger the draw right away
         // await triggerDraw(ipfsCidBytes32);
 
+        return ipfsCidString;
+
     } catch (err) {
         console.error(err);
     }

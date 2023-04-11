@@ -16,15 +16,12 @@ module.exports = {
         const drawScheduledAt = req.body.drawScheduledAt;
 
 
-        console.log(`drawTitle = ${drawTitle}\n`);
-        console.log(`drawRules = ${drawRules}\n`);
-        console.log(`drawParticipants = ${drawParticipants}\n`);
-        console.log(`drawNbWinners = ${drawNbWinners}\n`);
-        console.log(`drawScheduledAt = ${drawScheduledAt}\n`);
+        const ipfsCidString = await launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
 
-
-        await launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
-
+        return res.status(200).json({
+            ipfsCidString
+        });
+        
         // entry.total_supply = 0;
         // entry.thumbnail_url = `${batch}/${filename}`;
         // entry.metadata.launched_at = new Date();
