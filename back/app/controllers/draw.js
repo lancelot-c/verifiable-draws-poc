@@ -15,7 +15,6 @@ module.exports = {
         const drawNbWinners = req.body.drawNbWinners;
         const drawScheduledAt = req.body.drawScheduledAt;
 
-
         const ipfsCidString = await launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
 
         return res.status(200).json({

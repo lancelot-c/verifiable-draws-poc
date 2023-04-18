@@ -66,6 +66,7 @@
                         <p class="ipfs-card__cid q-mb-none q-mr-lg">verify.win/{{ ipfsCid }}</p>
                         <!-- <q-icon name="content_copy" /> -->
                         <q-btn round unelevated icon="content_copy" @click="copyIPFSLinkToClipboard()" />
+                        <q-btn round unelevated icon="open_in_new" :href="'https://www.verify.win/ipfs/' + ipfsCid" target="_blank" />
                     </div>
                     <p class="text-center q-my-lg">
                         In order for the draw to be valid you MUST share this link before <span class="text-underline">{{ drawScheduledAtDate }} {{ drawScheduledAtTime }}</span>.
@@ -148,7 +149,7 @@ Saudi Arabia
 Iran
 Ecuador`;
 const drawParticipants = ref(participantsPlaceholder);
-const nbWinnersPlaceholder = '48';
+const nbWinnersPlaceholder = '4';
 const drawNbWinners = ref(nbWinnersPlaceholder);
 
 const ipfsCid = ref('');
@@ -173,7 +174,7 @@ function timeOptionsFn(hr: number, min: number | null) {
 }
 
 function copyIPFSLinkToClipboard() {
-    navigator.clipboard.writeText(`http://localhost:9000/draw/${ipfsCid.value}`).then(() => {
+    navigator.clipboard.writeText(`https://azure-elderly-caribou-565.mypinata.cloud/ipfs/${ipfsCid.value}`).then(() => {
         console.log('Async: Copying to clipboard was successful!');
     }, (err) => {
         console.error('Async: Could not copy text: ', err);
@@ -222,7 +223,7 @@ function reset() {
     background-color: #f3f3f3;
     border-radius: 4px;
     padding: 8px;
-    font-size: 1.6em;
+    font-size: 1.55em;
 }
 
 .text-underline {

@@ -45,7 +45,6 @@ async function launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners,
 
         // Generate draw file
         const drawFilepath = await generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
-        console.log(`drawFilepath = ${drawFilepath}`);
 
         // Pin draw file on IPFS
         const [ipfsCidString, ipfsCidBytes32] = await pinOnIPFS(drawFilepath);
@@ -53,15 +52,15 @@ async function launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners,
         // Rename draw file to match IPFS CID
         await renameFileToIPFS_CID(drawFilepath, ipfsCidString);
 
-        // // Compute entropy needed
+        // Compute entropy needed
         const drawNbParticipants = drawParticipants.length;
         const entropyNeeded = await computeEntropyNeeded(drawNbParticipants, drawNbWinners);
 
-        // // Publish draw on smart contract
-        // await publishOnSmartContract(ipfsCidBytes32, drawScheduledAt, entropyNeeded);
+        // Publish draw on smart contract
+        await publishOnSmartContract(ipfsCidBytes32, drawScheduledAt, entropyNeeded);
 
-        // // Trigger the draw right away
-        // await triggerDraw(ipfsCidBytes32);
+        // Trigger the draw right away
+        triggerDraw(ipfsCidBytes32);
 
         return ipfsCidString;
 
@@ -75,25 +74,22 @@ async function generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWi
 
     const content = await fsPromises.readFile(templateFilepath, 'utf8');
 
-    let date = new Date(unix_timestamp * 1000);
-    drawScheduledAt = `Draw scheduled on ${date.toGMTString()}`;
-    // April 27, 2023 at 8am (UTC+1)
-
     drawParticipants = drawParticipants.split('\n');
-    drawParticipantsList = `<li>${drawParticipants.join('</li><li>')}</li>`;
+    drawParticipantsList = `'${drawParticipants.join('\',\'')}'`;
 
     // Replace placeholders with draw parameters
-    const newContent = content.replaceAll('{{ drawTitle }}', drawTitle)
-        .replaceAll('{{ drawScheduledAt }}', drawScheduledAt)
+    const newContent = content.replaceAll('{{ contractAddress }}', TESTNET_CONTRACT_ADDRESS)
+        .replaceAll('{{ drawTitle }}', drawTitle)
+        .replaceAll('{{ drawScheduledAt }}', unix_timestamp)
         .replaceAll('{{ drawRules }}', drawRules.replaceAll('\n', '<br />'))
         .replaceAll('{{ drawNbParticipants }}', drawParticipants.length)
-        .replaceAll('{{ drawParticipants }}', drawParticipantsList);
+        .replaceAll('{{ drawParticipants }}', drawParticipantsList)
+        .replaceAll('{{ drawNbWinners }}', drawNbWinners);
 
     const fileHash = sha256(newContent);
     drawTempFilepath = `./draws/${fileHash}.html`;
 
     await fsPromises.writeFile(drawTempFilepath, newContent, 'utf8');
-    console.log('sdfdfd');
     return drawTempFilepath;
 
 }
@@ -104,17 +100,19 @@ function sha256(message) {
 
 async function pinOnIPFS(filepath) {
     const filename = path.basename(filepath);
-    console.log(`Uploading ${filepath} to IPFS...`);
+    console.log(`Uploading ${filepath} to IPFS...\n`);
     const readableStreamForFile = fs.createReadStream(filepath);
     const response = await pinata.pinFileToIPFS(readableStreamForFile, { pinataMetadata: { name: filename } });
-    console.log('Pinata response', response);
+    console.log('Pinata response : ', response, '\n');
     const ipfsCidString = response.IpfsHash;
-    console.log(`Draw pinned on IPFS with CID ${ipfsCidString}`);
+    console.log(`Draw pinned on IPFS with CID ${ipfsCidString}\n`);
+    
     const ipfsCidBytes32 = getBytes32FromIpfsHash(ipfsCidString);
-    console.log(`ipfsCidBytes32 = ${ipfsCidBytes32}`);
+    console.log(`ipfsCidBytes32 = ${ipfsCidBytes32}\n`);
+
     return [ipfsCidString, ipfsCidBytes32];
 }
-
+  
 async function renameFileToIPFS_CID(drawFilepath, ipfsCidString) {
     const newFilepath = drawFilepath.replace(path.basename(drawFilepath), `${ipfsCidString}.html`);
 
@@ -132,11 +130,15 @@ async function computeEntropyNeeded(nbParticipants, nbWinners) {
 
     let entropyNeeded = 0;
 
-    for (let i = 0; i < nbWinners; i++) {
-        entropyNeeded += Math.ceil(Math.log2(nbParticipants - i) / 8); // in bytes
-    }
+    // Simple method
+    entropyNeeded = nbWinners * Math.ceil(Math.log2(nbParticipants) / 8); // in bytes
 
-    console.log(`${entropyNeeded} bytes of entropy needed`);
+    // Optimised using Information Theory
+    // for (let i = 0; i < nbWinners; i++) {
+    //     entropyNeeded += Math.ceil(Math.log2(nbParticipants - i) / 8); // in bytes
+    // }
+
+    console.log(`${entropyNeeded} bytes of entropy needed\n`);
     return entropyNeeded;
 }
 
@@ -144,19 +146,21 @@ async function publishOnSmartContract(ipfsCidBytes32, scheduledAt, entropyNeeded
     const launchDraw = await contract.launchDraw(ipfsCidBytes32, scheduledAt, entropyNeeded);
     await launchDraw.wait();
 
-    console.log(`Draw published on smart contract`);
+    console.log(`Draw ${ipfsCidBytes32} published on smart contract ${TESTNET_CONTRACT_ADDRESS}\n`);
 }
 
 async function triggerDraw(ipfsCidBytes32) {
-    const abi = ethers.utils.defaultAbiCoder;
+    const abi = hre.ethers.utils.defaultAbiCoder;
     const params = abi.encode(
         ["bytes32[]"],
         [[ipfsCidBytes32]]
     );
+    console.log(`call performUpkeep(${params})\n`);
+
     const performUpkeep = await contract.performUpkeep(params);
     await performUpkeep.wait();
 
-    console.log(`performUpkeep call done`);
+    console.log(`performUpkeep call done\n`);
 }
 
 function isNumeric(str) {

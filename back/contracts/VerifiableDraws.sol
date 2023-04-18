@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+// SPDX-License-Identifier: AGPL-3.0-or-later
+pragma solidity 0.8.19;
 
 import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol"; // ChainLink Automation
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol"; // ChainLink VRF
@@ -75,7 +75,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     // this limit based on the network that you select, the size of the request,
     // and the processing of the callback request in the fulfillRandomWords()
     // function.
-    uint32 callbackGasLimit = 100000;
+    uint32 callbackGasLimit = 500000;
 
     // The default is 3, but you can set this higher.
     uint16 requestConfirmations = 3;
