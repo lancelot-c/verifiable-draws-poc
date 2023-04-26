@@ -8,7 +8,7 @@
         </q-toolbar-title>
 
         <div class="search-input">
-            <q-input dark dense standout v-model="search" placeholder="Search draw by ID">
+            <q-input dark dense standout v-model="search" placeholder="Rechercher un tirage">
             <template v-slot:prepend>
                 <q-icon name="search" />
             </template>
