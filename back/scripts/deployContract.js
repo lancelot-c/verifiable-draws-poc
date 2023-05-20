@@ -1,13 +1,14 @@
 
-const hre = require('hardhat');
-const network = hre.network.name;
-const fs = require("fs");
-const os = require("os");
-const { CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID } = process.env;
+import hardhat from 'hardhat';
+import fs from 'fs'
+import os from 'os'
+const { CONTRACT_NAME, TESTNET_CHAINLINK_VRF_SUBSCRIPTION_ID, MAINNET_CHAINLINK_VRF_SUBSCRIPTION_ID } = process.env;
+const network = hardhat.network.name;
 
 async function deployAll() {
     
-    await deployOne(CONTRACT_NAME, CHAINLINK_VRF_SUBSCRIPTION_ID);
+    let chainlink_vrf_subscription_id = (network == 'mainnet') ? MAINNET_CHAINLINK_VRF_SUBSCRIPTION_ID : TESTNET_CHAINLINK_VRF_SUBSCRIPTION_ID;
+    await deployOne(CONTRACT_NAME, chainlink_vrf_subscription_id);
 }
 
 
@@ -16,7 +17,7 @@ async function deployOne(contractName, args) {
     const [deployer] = await ethers.getSigners();
     console.log(`\nDeploying...\nNetwork: ${network}\nAccount: ${deployer.address}\nContract: ${contractName}\nArgs: ${args}\n`);
 
-    const contractFactory = await hre.ethers.getContractFactory(contractName);
+    const contractFactory = await hardhat.ethers.getContractFactory(contractName);
     const contract = await contractFactory.deploy(args);
     await contract.deployed();
     

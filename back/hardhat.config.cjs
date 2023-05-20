@@ -4,18 +4,18 @@ require("@nomiclabs/hardhat-ethers");
 require("@nomiclabs/hardhat-waffle");
 require('hardhat-contract-sizer');
 require("hardhat-gas-reporter");
-const { INFURA_TESTNET_API_URL, INFURA_MAINNET_API_URL, WALLET_PRIVATE_KEY, COIN_MARKETCAP_API_KEY } = process.env;
+const { HARDHAT_DEFAULT_NETWORK, TESTNET_API_URL, MAINNET_API_URL, WALLET_PRIVATE_KEY, COIN_MARKETCAP_API_KEY } = process.env;
 
 
 module.exports = {
-    defaultNetwork: "sepolia",
+    defaultNetwork: HARDHAT_DEFAULT_NETWORK,
     networks: {
-        sepolia: {
-            url      : INFURA_TESTNET_API_URL,
+        testnet: {
+            url      : TESTNET_API_URL,
             accounts : [`${WALLET_PRIVATE_KEY}`]
         },
         mainnet: {
-            url      : INFURA_MAINNET_API_URL,
+            url      : MAINNET_API_URL,
             accounts : [`${WALLET_PRIVATE_KEY}`]
         }
     },

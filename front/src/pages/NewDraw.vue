@@ -84,10 +84,10 @@
                             </p>
                         
                             <div class="ipfs-card row justify-center items-center">
-                                <p class="ipfs-card__cid q-mb-none q-mr-lg">verify.win/{{ ipfsCid }}</p>
+                                <p class="ipfs-card__cid q-mb-none q-mr-lg">https://{{ ipfsCid }}.ipfs.dweb.link/{{ drawFilename }}</p>
                                 <!-- <q-icon name="content_copy" /> -->
                                 <q-btn round unelevated icon="content_copy" @click="copyIPFSLinkToClipboard()" />
-                                <q-btn round unelevated icon="open_in_new" :href="'https://www.verify.win/ipfs/' + ipfsCid" target="_blank" />
+                                <q-btn round unelevated icon="open_in_new" :href="'https://' + ipfsCid + '.ipfs.dweb.link/' + drawFilename" target="_blank" />
                             </div>
                             <p class="text-center q-my-lg">
                                 Pour que le tirage soit valide vous DEVEZ partager ce lien avant le <span class="text-underline">{{ drawScheduledAtDate }} à {{ drawScheduledAtTime }}</span>.
@@ -199,6 +199,7 @@ const nbWinnersPlaceholder = '48';
 const drawNbWinners = ref(nbWinnersPlaceholder);
 
 const ipfsCid = ref('');
+const drawFilename = ref('');
 
 const myLocale = {
     /* starting with Sunday */
@@ -253,7 +254,7 @@ function timeOptionsFn(hr: number, min: number | null) {
 }
 
 function copyIPFSLinkToClipboard() {
-    navigator.clipboard.writeText(`https://www.verify.win/ipfs/${ipfsCid.value}`).then(() => {
+    navigator.clipboard.writeText(`https://${ipfsCid.value}.ipfs.dweb.link/${drawFilename.value}`).then(() => {
         console.log('Async: Copying to clipboard was successful!');
     }, (err) => {
         console.error('Async: Could not copy text: ', err);
@@ -284,6 +285,7 @@ async function deployDraw() {
     const createdDraw = await DrawService.create(drawTitle.value, drawRules.value, drawParticipants.value, drawNbWinners.value, drawScheduledAtTimestamp);
 
     ipfsCid.value = createdDraw.data.ipfsCidString;
+    drawFilename.value = createdDraw.data.drawFilename;
     step.value = 4;
     loading.value = false;
 }
@@ -302,7 +304,7 @@ function reset() {
     background-color: #f3f3f3;
     border-radius: 4px;
     padding: 8px;
-    font-size: 1.3em;
+    font-size: .95em;
 }
 
 .text-underline {

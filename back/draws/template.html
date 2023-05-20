@@ -16,36 +16,32 @@
     <!-- <link rel="icon" href="images/favicon.png" /> -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
-    <script src="https://unpkg.com/fireworks-js@2.x/dist/index.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Equivalent to https://unpkg.com/fireworks-js@2.x/dist/index.umd.js -->
+    <script src="https://bafybeidmyj27yy6zit6tjc7d5rcftdkfzupljpkzzltatfqdlcz5fb56iq.ipfs.dweb.link/index.umd.js"></script>
+    
     <script type="module">
-        // Equivalent to https://cdn.ethers.io/lib/ethers-5.7.esm.min.js
-        import { ethers } from "https://bafybeifpcllziyt5vdb6stwg5xgaj4ruhkcmf6kzorwynpwrogsf5snu7i.ipfs.dweb.link/ethers.js";
 
-        const provider = new ethers.providers.JsonRpcProvider('https://sepolia.infura.io/v3/d88a446e2eaf4af4b4240ba91ff5e732');
+        // Equivalent to https://cdn.ethers.io/lib/ethers-5.7.esm.min.js
+        import { ethers } from "https://bafybeihbbwwchkazi6gb6weqqehhyj3h2kioohwxqfhkea2cb4z7vfx2p4.ipfs.dweb.link/ethers-5.7.esm.min.js";
+
+        const providerURL = '{{ providerURL }}';
+        const provider = new ethers.providers.JsonRpcProvider(providerURL);
+        
         const contractAddress = '{{ contractAddress }}';
         const contract = new ethers.Contract(contractAddress, [
-            'function getEntropy(bytes32 cid) external view returns (bytes memory)',
+            'function getEntropy(string cid) external view returns (bytes memory)',
         ], provider);
 
         const url = window.location.href;
         console.log(`url = ${url}`);
 
-        const stringCID = url.replace(/^.*[\\\/]/, '');
+        const stringCID = url.slice(8).split('.')[0]
         console.log(`stringCID = ${stringCID}`);
 
         const stringCidElmts = document.getElementsByClassName('stringCID');
         for (let i = 0; i < stringCidElmts.length; i++) {
             stringCidElmts[i].innerHTML = stringCID;
-        }
-
-        const bytes32CID = getBytes32FromIpfsHash(stringCID);
-        console.log(`bytes32CID = ${bytes32CID}`);
-
-        const bytesCidElmts = document.getElementsByClassName('bytesCid');
-        for (let i = 0; i < bytesCidElmts.length; i++) {
-            bytesCidElmts[i].innerHTML = bytes32CID;
         }
 
         const drawParticipants = [{{ drawParticipants }}];
@@ -121,7 +117,7 @@
 
         async function checkDrawResult() {
 
-            let entropy = await contract.getEntropy(bytes32CID);
+            let entropy = await contract.getEntropy(stringCID);
             console.log(`entropy = ${entropy}`);
             return [entropy != '0x', entropy];
         }
@@ -159,20 +155,6 @@
                 const winner = drawParticipants.splice(winnerIndex, 1)[0];
                 winnersListElement.innerHTML += `<li>${winner}</li>`;
             }
-        }
-
-        function getBytes32FromIpfsHash(ipfsCidString) {
-            const MAP = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-            const b58String_to_b10Array = function (S, A) { var d = [], b = [], i, j, c, n; for (i in S) { j = 0, c = A.indexOf(S[i]); if (c < 0) return undefined; c || b.length ^ i ? i : b.push(0); while (j in d || c) { n = d[j]; n = n ? n * 58 + c : c; c = n >> 8; d[j] = n % 256; j++ } } while (j--) b.push(d[j]); return new Uint8Array(b) };
-            const b10Array = b58String_to_b10Array(ipfsCidString, MAP);
-            const b16 = buf2hex(b10Array.slice(2).buffer);
-            return `0x${b16}`;
-        }
-
-        function buf2hex(buffer) {
-            return [...new Uint8Array(buffer)]
-                .map(x => x.toString(16).padStart(2, '0'))
-                .join('');
         }
 
         function getNbDigits(number) {

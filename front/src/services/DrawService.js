@@ -12,6 +12,12 @@ class DrawService {
         });
     }
 
+    launch(cid) {
+        return http.post('/draw/launch', {
+            cid
+        });
+    }
+
 }
 
 export default new DrawService();

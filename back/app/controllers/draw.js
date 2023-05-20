@@ -1,41 +1,32 @@
-const sequelize = require("../models").sequelize;
-const { Op } = require("sequelize");
-const Draw = require("../models").Draw;
-const http = require('axios').create();
-const { ethers } = require("ethers");
-const dotenv = require("dotenv").config();
-const { launchDraw } = require("./../../scripts/launchDraw");
+import http from 'axios'
+http.create()
+import * as dotenv from 'dotenv'
+dotenv.config()
+import { createDraw, triggerDraw } from "./../../scripts/launchDraw.js";
 
-module.exports = {
-    createDraw: async (req, res) => {
 
-        const drawTitle = req.body.drawTitle;
-        const drawRules = req.body.drawRules;
-        const drawParticipants = req.body.drawParticipants;
-        const drawNbWinners = req.body.drawNbWinners;
-        const drawScheduledAt = req.body.drawScheduledAt;
+export async function create(req, res) {
 
-        const ipfsCidString = await launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
+    const drawTitle = req.body.drawTitle;
+    const drawRules = req.body.drawRules;
+    const drawParticipants = req.body.drawParticipants;
+    const drawNbWinners = req.body.drawNbWinners;
+    const drawScheduledAt = req.body.drawScheduledAt;
 
-        return res.status(200).json({
-            ipfsCidString
-        });
-        
-        // entry.total_supply = 0;
-        // entry.thumbnail_url = `${batch}/${filename}`;
-        // entry.metadata.launched_at = new Date();
-        // entry.metadata.image = `ipfs://${ipfsHash}`;
-        // entry.createdAt = new Date();
-        // entry.updatedAt = new Date();
-        // await Asset.upsert(entry);
+    const [ipfsCidString, drawFilename] = await createDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
 
-        // Draw.findAndCountAll({ limit, offset })
-        //     .then((assets) => {
-        //         const response = getPagingData(assets, page, limit);
-        //         return res.status(200).json(response);
-        //     })
-        //     .catch((err) => {
-        //         return res.status(400).json({ err });
-        //     });
-    }
-};
+    return res.status(200).json({
+        ipfsCidString,
+        drawFilename
+    });
+}
+
+export async function launch(req, res) {
+
+    const cid = req.body.cid;
+    const response = await triggerDraw(cid);
+
+    return res.status(200).json({
+        response
+    });
+}

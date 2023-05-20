@@ -1,7 +1,7 @@
-const { Model } = require('sequelize');
+import { Model } from 'sequelize'
 
 
-module.exports = (sequelize, DataTypes) => {
+export function constructor(sequelize, DataTypes) {
     class Draw extends Model {
         /**
          * Helper method for defining associations.
@@ -32,4 +32,4 @@ module.exports = (sequelize, DataTypes) => {
 
 
     return Draw;
-};
+}

@@ -15,8 +15,8 @@ import "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol"; // Ownership
  */
 contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, ConfirmedOwner {
 
-    error DrawDoesNotExist(bytes32 cid);
-    error DrawTooEarly(bytes32 cid);
+    error DrawDoesNotExist(string cid);
+    error DrawTooEarly(string cid);
 
     struct Draw {
         uint64 publishedAt; // block number at which the draw was published on the contract
@@ -29,15 +29,15 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     }
    
     // Draws 
-    mapping(bytes32 => Draw) private draws; // Content Identifier (CID) => Draw
-    bytes32[] private pendingDraws;
+    mapping(string => Draw) private draws; // Content Identifier (CID) => Draw
+    string[] private pendingDraws;
 
     // Events
-    event DrawLaunched(bytes32 cid, uint64 publishedAt, uint64 scheduledAt, uint32 entropyNeeded);
-    event DrawsTriggered(bytes32[] performData);
+    event DrawLaunched(string cid, uint64 publishedAt, uint64 scheduledAt, uint32 entropyNeeded);
+    event DrawsTriggered(string[] performData);
     event RequestSent(
         uint256 requestId,
-        bytes32[] cids,
+        string[] cids,
         uint32 numWords,
         bytes32 keyHash,
         uint64 s_subscriptionId,
@@ -45,24 +45,24 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint32 callbackGasLimit
     );
     event RequestFulfilled(uint256 requestId, uint256[] randomWords);
-    event DrawCompleted(bytes32 cid, bytes extractedEntropy);
+    event DrawCompleted(string cid, bytes extractedEntropy);
 
     struct RequestStatus {
         bool exists; // whether a requestId exists
         bool fulfilled; // whether the request has been successfully fulfilled
         uint256[] randomWords;
-        bytes32[] cids;
+        string[] cids;
     }
     mapping(uint256 => RequestStatus) public s_requests; /* requestId --> requestStatus */
 
     VRFCoordinatorV2Interface COORDINATOR;
 
-    // Sepolia
+    // Polygon Mumbai testnet
     // For other networks see https://docs.chain.link/docs/vrf-contracts/#configurations
-    address vrfCoordinator = 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625;
-    address link_token_contract = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
+    address link_token_contract = 0xb0897686c545045aFc77CF20eC7A532E3120E0F1;
+    address vrfCoordinator = 0xAE975071Be8F8eE67addBC1A82488F1C24858067;
     // Gas lane to use, which specifies the maximum gas price to bump to
-    bytes32 keyHash = 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c;
+    bytes32 keyHash = 0x6e099d640cde6de9d40ac749b4b594126b0169747122711109c9985d47751f93;
     
 
     // Your subscription ID.
@@ -92,7 +92,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     }
 
     function launchDraw(
-        bytes32 cid,
+        string memory cid,
         uint64 scheduledAt,
         uint32 entropyNeeded
     )
@@ -117,11 +117,11 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         returns (bool upkeepNeeded, bytes memory performData)
     {
         upkeepNeeded = false;
-        bytes32[] memory tempDraws = new bytes32[](pendingDraws.length);
+        string[] memory tempDraws = new string[](pendingDraws.length);
         uint32 count = 0;
 
         for (uint64 i = 0; i < pendingDraws.length; i++) {
-            bytes32 cid = pendingDraws[i];
+            string memory cid = pendingDraws[i];
             if (block.timestamp >= draws[cid].scheduledAt && !draws[cid].entropyPending) {
                 if (!upkeepNeeded) {
                     upkeepNeeded = true;
@@ -134,9 +134,9 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
         if (upkeepNeeded) {
             uint32 j = 0;
-            bytes32[] memory finalDraws = new bytes32[](count);
+            string[] memory finalDraws = new string[](count);
             for (uint64 i = 0; i < tempDraws.length; i++) {
-                if (tempDraws[i] != 0x0) {
+                if (bytes(tempDraws[i]).length != 0) {
                     finalDraws[j] = tempDraws[i];
                     j++;
                 }
@@ -154,10 +154,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         external
         override
     {
-        bytes32[] memory requestedDraws = abi.decode(performData, (bytes32[]));
+        string[] memory requestedDraws = abi.decode(performData, (string[]));
 
         for (uint64 i = 0; i < requestedDraws.length; i++) {
-            bytes32 cid = requestedDraws[i];
+            string memory cid = requestedDraws[i];
             if (draws[cid].publishedAt == 0) {
                 revert DrawDoesNotExist(cid);
             }
@@ -179,7 +179,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
 
     // Assumes the subscription is funded sufficiently.
-    function generateEntropyFor(bytes32[] memory triggerDraws)
+    function generateEntropyFor(string[] memory triggerDraws)
         private
         returns (uint256 requestId)
     {
@@ -240,7 +240,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint32 bytesNeeded = 0;
 
         for (uint64 i = 0; i < request.cids.length; i++) {
-            bytes32 cid = request.cids[i];
+            string memory cid = request.cids[i];
 
             if (draws[cid].completed == false) {
 
@@ -265,7 +265,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return (request.fulfilled, request.randomWords);
     }
 
-    function getEntropy(bytes32 cid) external view returns (bytes memory) {
+    function getEntropy(string memory cid) external view returns (bytes memory) {
         return draws[cid].entropy;
     }
 
@@ -282,9 +282,9 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
       return returnValue;
     }
 
-    function removePending(bytes32 searchFor) internal {
+    function removePending(string memory searchFor) internal {
         for (uint256 i = 0; i < pendingDraws.length; i++) {
-            if (pendingDraws[i] == searchFor) {
+            if (keccak256(bytes(pendingDraws[i])) == keccak256(bytes(searchFor))) {
                 pendingDraws[i] = pendingDraws[pendingDraws.length-1];
                 pendingDraws.pop();
             }

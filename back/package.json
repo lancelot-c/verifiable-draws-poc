@@ -6,14 +6,15 @@
   "scripts": {
     "start": "node ./server/index.js",
     "dev": "nodemon ./server/index.js",
-    "deploy-contract-testnet": "npx hardhat run --network sepolia scripts/deployContract.js",
+    "deploy-contract-testnet": "npx hardhat run --network testnet scripts/deployContract.js",
     "deploy-contract-mainnet": "npx hardhat run --network mainnet scripts/deployContract.js",
-    "launch-draw-testnet": "npx hardhat run --network sepolia scripts/launchDraw.js",
+    "launch-draw-testnet": "npx hardhat run --network testnet scripts/launchDraw.js",
     "launch-draw-mainnet": "npx hardhat run --network mainnet scripts/launchDraw.js",
     "size": "npx hardhat size-contracts",
     "compile": "npx hardhat compile",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lancelot-c/verifiable-draws.git"
@@ -27,22 +28,23 @@
   "dependencies": {
     "@chainlink/contracts": "^0.6.1",
     "@openzeppelin/contracts": "^4.8.1",
-    "@pinata/sdk": "^2.1.0",
-    "bs58": "^4.0.1",
+    "axios": "^1.4.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "ethers": "^5.7.2",
     "express": "^4.18.2",
+    "multiformats": "^11.0.2",
     "mysql2": "^3.2.0",
     "pg": "^8.10.0",
     "pg-hstore": "^2.3.4",
-    "sequelize": "^6.30.0"
+    "sequelize": "^6.30.0",
+    "web3.storage": "^3.1.0"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.2.2",
     "@nomiclabs/hardhat-waffle": "^2.0.5",
     "@remix-project/remixd": "^0.6.11",
-    "hardhat": "^2.12.7",
+    "hardhat": "^2.12.0-esm.1",
     "hardhat-contract-sizer": "^2.8.0",
     "hardhat-gas-reporter": "^1.0.9",
     "nodemon": "^2.0.20"

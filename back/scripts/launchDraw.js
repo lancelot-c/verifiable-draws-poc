@@ -1,20 +1,36 @@
-const hre = require('hardhat');
-const fs = require('fs');
+import fs from 'fs'
+import hardhat from 'hardhat';
 const fsPromises = fs.promises;
-const path = require('path');
-const readline = require('readline');
-const { createHash } = require('crypto');
-const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS, PINATA_JWT } = process.env;
-const { getBytes32FromIpfsHash } = require("../utils/ipfs");
-const pinataSDK = require('@pinata/sdk');
-const pinata = new pinataSDK({ pinataJWTKey: PINATA_JWT });
+import path from 'path'
+import crypto from 'crypto'
+import axios from 'axios'
+const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS, MAINNET_CONTRACT_ADDRESS, TESTNET_API_URL, MAINNET_API_URL, WEB3_STORAGE_API_TOKEN } = process.env;
+import { Web3Storage, getFilesFromPath } from 'web3.storage';
+const network = hardhat.network.name;
+const providerURL = (network == 'mainnet') ? MAINNET_API_URL : TESTNET_API_URL;
+const contractAddress = (network == 'mainnet') ? MAINNET_CONTRACT_ADDRESS : TESTNET_CONTRACT_ADDRESS;
 const abi = JSON.parse(fs.readFileSync(`./artifacts/contracts/${CONTRACT_NAME}.sol/${CONTRACT_NAME}.json`)).abi;
-const provider = new hre.ethers.Wallet(WALLET_PRIVATE_KEY, hre.ethers.provider);
-const contract = new hre.ethers.Contract(
-    TESTNET_CONTRACT_ADDRESS,
+const provider = new hardhat.ethers.Wallet(WALLET_PRIVATE_KEY, hardhat.ethers.provider);
+const contract = new hardhat.ethers.Contract(
+    contractAddress,
     abi,
     provider
 );
+
+const originalGetFeeData = provider.getFeeData.bind(provider)
+provider.getFeeData = async () => {
+    
+
+    const gasStationUrl = (network == 'mainnet') ? 'https://gasstation-mainnet.matic.network/v2' : 'https://gasstation-mumbai.matic.today/v2'
+    const { data: { standard } } = await axios.get(gasStationUrl)
+
+    const data = await originalGetFeeData()
+
+    data.maxFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxFee).toString(), 'gwei')
+    data.maxPriorityFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxPriorityFee).toString(), 'gwei')
+
+    return data
+}
 
 async function main() {
 
@@ -26,11 +42,11 @@ async function main() {
     const drawScheduledAt = process.env.npm_config_drawScheduledAt;
 
 
-    await launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
+    await createDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
 
 }
 
-async function launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt) {
+export async function createDraw(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt) {
     try {
 
         console.log(`drawTitle = \n"${drawTitle}"\n\n`);
@@ -43,27 +59,28 @@ async function launchDraw(drawTitle, drawRules, drawParticipants, drawNbWinners,
             throw Error('You need to specify all draw parameters.');
         }
 
-        // Generate draw file
-        const drawFilepath = await generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
-
-        // Pin draw file on IPFS
-        const [ipfsCidString, ipfsCidBytes32] = await pinOnIPFS(drawFilepath);
-
-        // Rename draw file to match IPFS CID
-        await renameFileToIPFS_CID(drawFilepath, ipfsCidString);
-
         // Compute entropy needed
         const drawNbParticipants = drawParticipants.length;
         const entropyNeeded = await computeEntropyNeeded(drawNbParticipants, drawNbWinners);
 
-        // Publish draw on smart contract
-        await publishOnSmartContract(ipfsCidBytes32, drawScheduledAt, entropyNeeded);
+        // Generate draw file
+        const [drawFilepath, folderName] = await generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWinners, drawScheduledAt);
 
-        // Trigger the draw right away
-        triggerDraw(ipfsCidBytes32);
+        // Pin draw file on IPFS
+        const rootCid = await pinOnIPFS(drawFilepath, drawTitle)
+            .then((cid) => {
+                // Rename draw file to match IPFS CID
+                renameFolderToIPFS_CID(folderName, cid);
 
-        return ipfsCidString;
+                // Publish draw on smart contract
+                publishOnSmartContract(cid, drawScheduledAt, entropyNeeded);
 
+                return cid;
+            });
+
+        const drawFilename = path.basename(drawFilepath)
+        return [rootCid, drawFilename]
+        
     } catch (err) {
         console.error(err);
     }
@@ -75,10 +92,12 @@ async function generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWi
     const content = await fsPromises.readFile(templateFilepath, 'utf8');
 
     drawParticipants = drawParticipants.split('\n');
-    drawParticipantsList = `'${drawParticipants.join('\',\'')}'`;
+    const drawParticipantsList = `'${drawParticipants.join('\',\'')}'`;
 
     // Replace placeholders with draw parameters
-    const newContent = content.replaceAll('{{ contractAddress }}', TESTNET_CONTRACT_ADDRESS)
+    const newContent = content
+        .replaceAll('{{ providerURL }}', providerURL)
+        .replaceAll('{{ contractAddress }}', contractAddress)
         .replaceAll('{{ drawTitle }}', drawTitle)
         .replaceAll('{{ drawScheduledAt }}', unix_timestamp)
         .replaceAll('{{ drawRules }}', drawRules.replaceAll('\n', '<br />'))
@@ -87,41 +106,54 @@ async function generateDrawFile(drawTitle, drawRules, drawParticipants, drawNbWi
         .replaceAll('{{ drawNbWinners }}', drawNbWinners);
 
     const fileHash = sha256(newContent);
-    drawTempFilepath = `./draws/${fileHash}.html`;
+    const drawTempFilepath = `./draws/${fileHash}/draw.html`;
 
+    await fs.promises.mkdir(`./draws/${fileHash}`).catch(console.error);
     await fsPromises.writeFile(drawTempFilepath, newContent, 'utf8');
-    return drawTempFilepath;
+    return [drawTempFilepath, fileHash];
 
 }
 
 function sha256(message) {
-    return Buffer.from(createHash('sha256').update(message).digest('hex')).toString('base64');
+    return Buffer.from(crypto.createHash('sha256').update(message).digest('hex')).toString('base64');
 }
 
-async function pinOnIPFS(filepath) {
-    const filename = path.basename(filepath);
+async function pinOnIPFS(filepath, drawTitle) {
     console.log(`Uploading ${filepath} to IPFS...\n`);
-    const readableStreamForFile = fs.createReadStream(filepath);
-    const response = await pinata.pinFileToIPFS(readableStreamForFile, { pinataMetadata: { name: filename } });
-    console.log('Pinata response : ', response, '\n');
-    const ipfsCidString = response.IpfsHash;
-    console.log(`Draw pinned on IPFS with CID ${ipfsCidString}\n`);
-    
-    const ipfsCidBytes32 = getBytes32FromIpfsHash(ipfsCidString);
-    console.log(`ipfsCidBytes32 = ${ipfsCidBytes32}\n`);
 
-    return [ipfsCidString, ipfsCidBytes32];
+    const token = WEB3_STORAGE_API_TOKEN
+  
+    if (!token) {
+      return console.error('A token is needed. You can create one on https://web3.storage')
+    }
+  
+    const storage = new Web3Storage({ token })
+    const files = []
+  
+    const pathFiles = await getFilesFromPath(filepath)
+    files.push(...pathFiles)
+
+    let resolve;
+    const cidPromise = new Promise((r) => {
+        resolve = r;
+    });
+
+    const onRootCidReady = (rootCid) => {
+        console.log(`Root CID is ${rootCid}\n`)
+        resolve(rootCid);
+    };
+
+    storage.put(files, { name: drawTitle, wrapWithDirectory: true, onRootCidReady })
+    return cidPromise;
 }
   
-async function renameFileToIPFS_CID(drawFilepath, ipfsCidString) {
-    const newFilepath = drawFilepath.replace(path.basename(drawFilepath), `${ipfsCidString}.html`);
+async function renameFolderToIPFS_CID(folderName, cid) {
+    const oldDirName = `./draws/${folderName}`
+    const newDirName = `./draws/${cid}`
 
-    fs.rename(drawFilepath, newFilepath, (err) => {
+    fs.rename(oldDirName, newDirName, (err) => {
         if (err) {
-            console.error(err);
-            return 0;
-        } else {
-            return newFilepath;
+            throw err
         }
     });
 }
@@ -142,18 +174,42 @@ async function computeEntropyNeeded(nbParticipants, nbWinners) {
     return entropyNeeded;
 }
 
-async function publishOnSmartContract(ipfsCidBytes32, scheduledAt, entropyNeeded) {
-    const launchDraw = await contract.launchDraw(ipfsCidBytes32, scheduledAt, entropyNeeded);
-    await launchDraw.wait();
+async function publishOnSmartContract(v1CidString, scheduledAt, entropyNeeded) {
+    console.log(`Publish draw ${v1CidString} on smart contract ${contractAddress}\n`);
 
-    console.log(`Draw ${ipfsCidBytes32} published on smart contract ${TESTNET_CONTRACT_ADDRESS}\n`);
+    // get max fees from gas station
+    // const isProd = (network == 'mainnet');
+    // let gasLimit = hardhat.ethers.BigNumber.from(20000000);
+    // let maxFeePerGas = hardhat.ethers.BigNumber.from(40000000000) // fallback to 40 gwei
+    // let maxPriorityFeePerGas = hardhat.ethers.BigNumber.from(40000000000) // fallback to 40 gwei
+    // try {
+    //     const { data } = await axios({
+    //         method: 'get',
+    //         url: isProd
+    //         ? 'https://gasstation-mainnet.matic.network/v2'
+    //         : 'https://gasstation-mumbai.matic.today/v2',
+    //     })
+    //     maxFeePerGas = hardhat.ethers.utils.parseUnits(
+    //         Math.ceil(data.fast.maxFee) + '',
+    //         'gwei'
+    //     )
+    //     maxPriorityFeePerGas = hardhat.ethers.utils.parseUnits(
+    //         Math.ceil(data.fast.maxPriorityFee) + '',
+    //         'gwei'
+    //     )
+    // } catch {
+    //     // ignore
+    // }
+
+    const launchDraw = await contract.launchDraw(v1CidString, scheduledAt, entropyNeeded);
+    await launchDraw.wait();
 }
 
-async function triggerDraw(ipfsCidBytes32) {
-    const abi = hre.ethers.utils.defaultAbiCoder;
+export async function triggerDraw(v1CidString) {
+    const abi = hardhat.ethers.utils.defaultAbiCoder;
     const params = abi.encode(
-        ["bytes32[]"],
-        [[ipfsCidBytes32]]
+        ["string[]"],
+        [[v1CidString]]
     );
     console.log(`call performUpkeep(${params})\n`);
 
@@ -176,6 +232,3 @@ function isNumeric(str) {
 //         console.error(error)
 //         process.exit(1)
 //     });
-
-
-module.exports = { launchDraw };

@@ -1,12 +1,12 @@
-// importing the dependencies
-const dotenv = require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const db = require("../app/models");
-const { subscribeEvents } = require("./events");
+import * as dotenv from 'dotenv' // see https://github.com/motdotla/dotenv#how-do-i-use-dotenv-with-import
+dotenv.config()
+import express from 'express'
+import cors from 'cors'
+import { db } from "../app/models/index.js";
+import { subscribeEvents } from "./events.js";
 
 // importing routes
-const drawRoutes = require("./../app/routes/draw");
+import { drawRouter } from "../app/routes/draw.js";
 
 // defining the Express app
 const app = express();
@@ -32,7 +32,7 @@ app.get("/api", (req, res) => {
     res.json({ message: `\nWelcome !\n` });
 });
 
-app.use("/api/draw", drawRoutes);
+app.use("/api/draw", drawRouter);
 
 // starting the server
 const PORT = process.env.PORT || 8080;
