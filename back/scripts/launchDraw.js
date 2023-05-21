@@ -4,9 +4,10 @@ const fsPromises = fs.promises;
 import path from 'path'
 import crypto from 'crypto'
 import axios from 'axios'
-const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS, MAINNET_CONTRACT_ADDRESS, TESTNET_API_URL, MAINNET_API_URL, WEB3_STORAGE_API_TOKEN } = process.env;
+const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS, MAINNET_CONTRACT_ADDRESS, TESTNET_API_URL, MAINNET_API_URL, MAINNET_GAS_STATION_URL, TESTNET_GAS_STATION_URL, WEB3_STORAGE_API_TOKEN } = process.env;
 import { Web3Storage, getFilesFromPath } from 'web3.storage';
 const network = hardhat.network.name;
+const gasStationURL = (network == 'mainnet') ? MAINNET_GAS_STATION_URL : TESTNET_GAS_STATION_URL;
 const providerURL = (network == 'mainnet') ? MAINNET_API_URL : TESTNET_API_URL;
 const contractAddress = (network == 'mainnet') ? MAINNET_CONTRACT_ADDRESS : TESTNET_CONTRACT_ADDRESS;
 const abi = JSON.parse(fs.readFileSync(`./artifacts/contracts/${CONTRACT_NAME}.sol/${CONTRACT_NAME}.json`)).abi;
@@ -17,19 +18,19 @@ const contract = new hardhat.ethers.Contract(
     provider
 );
 
+// Override ethers.js gas settings
+// Inspired from https://github.com/ethers-io/ethers.js/issues/2828#issuecomment-1531154466
 const originalGetFeeData = provider.getFeeData.bind(provider)
 provider.getFeeData = async () => {
-    
 
-    const gasStationUrl = (network == 'mainnet') ? 'https://gasstation-mainnet.matic.network/v2' : 'https://gasstation-mumbai.matic.today/v2'
-    const { data: { standard } } = await axios.get(gasStationUrl)
+  const { data: { standard } } = await axios.get(gasStationURL)
 
-    const data = await originalGetFeeData()
+  const data = await originalGetFeeData()
 
-    data.maxFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxFee).toString(), 'gwei')
-    data.maxPriorityFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxPriorityFee).toString(), 'gwei')
+  data.maxFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxFee).toString(), 'gwei')
+  data.maxPriorityFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxPriorityFee).toString(), 'gwei')
 
-    return data
+  return data
 }
 
 async function main() {
@@ -70,7 +71,10 @@ export async function createDraw(drawTitle, drawRules, drawParticipants, drawNbW
         const rootCid = await pinOnIPFS(drawFilepath, drawTitle)
             .then((cid) => {
                 // Rename draw file to match IPFS CID
-                renameFolderToIPFS_CID(folderName, cid);
+                // renameFolderToIPFS_CID(folderName, cid);
+
+                // Delete draw from filesystem
+                deleteDraw(folderName);
 
                 // Publish draw on smart contract
                 publishOnSmartContract(cid, drawScheduledAt, entropyNeeded);
@@ -158,6 +162,10 @@ async function renameFolderToIPFS_CID(folderName, cid) {
     });
 }
 
+function deleteDraw(folderName) {
+    fs.rmSync(`./draws/${folderName}`, { recursive: true, force: true });
+}
+
 async function computeEntropyNeeded(nbParticipants, nbWinners) {
 
     let entropyNeeded = 0;
@@ -176,30 +184,6 @@ async function computeEntropyNeeded(nbParticipants, nbWinners) {
 
 async function publishOnSmartContract(v1CidString, scheduledAt, entropyNeeded) {
     console.log(`Publish draw ${v1CidString} on smart contract ${contractAddress}\n`);
-
-    // get max fees from gas station
-    // const isProd = (network == 'mainnet');
-    // let gasLimit = hardhat.ethers.BigNumber.from(20000000);
-    // let maxFeePerGas = hardhat.ethers.BigNumber.from(40000000000) // fallback to 40 gwei
-    // let maxPriorityFeePerGas = hardhat.ethers.BigNumber.from(40000000000) // fallback to 40 gwei
-    // try {
-    //     const { data } = await axios({
-    //         method: 'get',
-    //         url: isProd
-    //         ? 'https://gasstation-mainnet.matic.network/v2'
-    //         : 'https://gasstation-mumbai.matic.today/v2',
-    //     })
-    //     maxFeePerGas = hardhat.ethers.utils.parseUnits(
-    //         Math.ceil(data.fast.maxFee) + '',
-    //         'gwei'
-    //     )
-    //     maxPriorityFeePerGas = hardhat.ethers.utils.parseUnits(
-    //         Math.ceil(data.fast.maxPriorityFee) + '',
-    //         'gwei'
-    //     )
-    // } catch {
-    //     // ignore
-    // }
 
     const launchDraw = await contract.launchDraw(v1CidString, scheduledAt, entropyNeeded);
     await launchDraw.wait();

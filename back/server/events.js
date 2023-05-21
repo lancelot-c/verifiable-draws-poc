@@ -2,11 +2,13 @@ import fs from 'fs'
 import hardhat from 'hardhat';
 import { triggerDraw } from "./../scripts/launchDraw.js";
 
-const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS } = process.env;
+const { CONTRACT_NAME, WALLET_PRIVATE_KEY, MAINNET_CONTRACT_ADDRESS, TESTNET_CONTRACT_ADDRESS } = process.env;
 const abi = JSON.parse(fs.readFileSync(`./artifacts/contracts/${CONTRACT_NAME}.sol/${CONTRACT_NAME}.json`)).abi;
 const provider = new hardhat.ethers.Wallet(WALLET_PRIVATE_KEY, hardhat.ethers.provider);
+const network = hardhat.network.name;
+const contractAddress = (network == 'mainnet') ? MAINNET_CONTRACT_ADDRESS : TESTNET_CONTRACT_ADDRESS;
 const contract = new hardhat.ethers.Contract(
-    TESTNET_CONTRACT_ADDRESS,
+    contractAddress,
     abi,
     provider
 );
