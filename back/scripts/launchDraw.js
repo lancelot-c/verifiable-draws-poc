@@ -7,7 +7,7 @@ import axios from 'axios'
 const { CONTRACT_NAME, WALLET_PRIVATE_KEY, TESTNET_CONTRACT_ADDRESS, MAINNET_CONTRACT_ADDRESS, TESTNET_API_URL, MAINNET_API_URL, MAINNET_GAS_STATION_URL, TESTNET_GAS_STATION_URL, WEB3_STORAGE_API_TOKEN } = process.env;
 import { Web3Storage, getFilesFromPath } from 'web3.storage';
 const network = hardhat.network.name;
-const gasStationURL = (network == 'mainnet') ? MAINNET_GAS_STATION_URL : TESTNET_GAS_STATION_URL;
+// const gasStationURL = (network == 'mainnet') ? MAINNET_GAS_STATION_URL : TESTNET_GAS_STATION_URL;
 const providerURL = (network == 'mainnet') ? MAINNET_API_URL : TESTNET_API_URL;
 const contractAddress = (network == 'mainnet') ? MAINNET_CONTRACT_ADDRESS : TESTNET_CONTRACT_ADDRESS;
 const abi = JSON.parse(fs.readFileSync(`./artifacts/contracts/${CONTRACT_NAME}.sol/${CONTRACT_NAME}.json`)).abi;
@@ -20,18 +20,18 @@ const contract = new hardhat.ethers.Contract(
 
 // Override ethers.js gas settings
 // Inspired from https://github.com/ethers-io/ethers.js/issues/2828#issuecomment-1531154466
-const originalGetFeeData = provider.getFeeData.bind(provider)
-provider.getFeeData = async () => {
+// const originalGetFeeData = provider.getFeeData.bind(provider)
+// provider.getFeeData = async () => {
 
-  const { data: { standard } } = await axios.get(gasStationURL)
+//   const { data: { standard } } = await axios.get(gasStationURL)
 
-  const data = await originalGetFeeData()
+//   const data = await originalGetFeeData()
 
-  data.maxFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxFee).toString(), 'gwei')
-  data.maxPriorityFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxPriorityFee).toString(), 'gwei')
+//   data.maxFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxFee).toString(), 'gwei')
+//   data.maxPriorityFeePerGas = hardhat.ethers.utils.parseUnits(Math.round(standard.maxPriorityFee).toString(), 'gwei')
 
-  return data
-}
+//   return data
+// }
 
 async function main() {
 

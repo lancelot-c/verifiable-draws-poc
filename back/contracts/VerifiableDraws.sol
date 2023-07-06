@@ -57,7 +57,6 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
     VRFCoordinatorV2Interface COORDINATOR;
 
-    // Polygon Mumbai testnet
     // For other networks see https://docs.chain.link/docs/vrf-contracts/#configurations
     address link_token_contract = 0xb0897686c545045aFc77CF20eC7A532E3120E0F1;
     address vrfCoordinator = 0xAE975071Be8F8eE67addBC1A82488F1C24858067;
@@ -265,7 +264,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return (request.fulfilled, request.randomWords);
     }
 
-    function getEntropy(string memory cid) external view returns (bytes memory) {
+    function getRandomnessForDraw(string memory cid) external view returns (bytes memory) {
         return draws[cid].entropy;
     }
 

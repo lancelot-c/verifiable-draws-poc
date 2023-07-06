@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv' // see https://github.com/motdotla/dotenv#how-d
 dotenv.config()
 import express from 'express'
 import cors from 'cors'
-import { db } from "../app/models/index.js";
+// import { db } from "../app/models/index.js";
 import { subscribeEvents } from "./events.js";
 
 // importing routes
@@ -23,9 +23,9 @@ var corsOptions = {
 };
 app.use(cors(corsOptions));
 
-db.sequelize.sync({ alter: true }).then(() => {
-    console.log(`\nDb is synced with models.\n`);
-});
+// db.sequelize.sync({ alter: true }).then(() => {
+//     console.log(`\nDb is synced with models.\n`);
+// });
 
 // Routing
 app.get("/api", (req, res) => {

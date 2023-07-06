@@ -30,7 +30,7 @@
         
         const contractAddress = '{{ contractAddress }}';
         const contract = new ethers.Contract(contractAddress, [
-            'function getEntropy(string cid) external view returns (bytes memory)',
+            'function getRandomnessForDraw(string cid) external view returns (bytes memory)',
         ], provider);
 
         const url = window.location.href;
@@ -117,7 +117,7 @@
 
         async function checkDrawResult() {
 
-            let entropy = await contract.getEntropy(stringCID);
+            let entropy = await contract.getRandomnessForDraw(stringCID);
             console.log(`entropy = ${entropy}`);
             return [entropy != '0x', entropy];
         }

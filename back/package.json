@@ -41,6 +41,7 @@
     "web3.storage": "^3.1.0"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-verify": "^1.0.3",
     "@nomiclabs/hardhat-ethers": "^2.2.2",
     "@nomiclabs/hardhat-waffle": "^2.0.5",
     "@remix-project/remixd": "^0.6.11",
