@@ -20,7 +20,7 @@ export async function subscribeEvents() {
         let event = { cid, publishedAt, scheduledAt, entropyNeeded };
         console.log('\nDrawLaunched 💥\n', JSON.stringify(event, null, 4));
 
-        triggerDraw(cid);
+        // triggerDraw(cid);
     });
     console.log('Subscribed to DrawLaunched');
 

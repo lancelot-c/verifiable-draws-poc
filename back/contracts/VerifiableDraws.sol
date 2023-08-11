@@ -80,10 +80,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     uint64 private s_subscriptionId;
 
     // For other networks see https://docs.chain.link/docs/vrf-contracts/#configurations
-    address link_token_contract = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
-    address vrfCoordinator = 0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed;
+    address link_token_contract = 0xb0897686c545045aFc77CF20eC7A532E3120E0F1;
+    address vrfCoordinator = 0xAE975071Be8F8eE67addBC1A82488F1C24858067;
     // Gas lane to use, which specifies the maximum gas price to bump to
-    bytes32 keyHash = 0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f;
+    bytes32 keyHash = 0x6e099d640cde6de9d40ac749b4b594126b0169747122711109c9985d47751f93;
     
     // Depends on the number of requested values that you want sent to the
     // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
