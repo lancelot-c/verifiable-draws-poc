@@ -7,11 +7,11 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol"; // ChainLink VRF
 import "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol"; // Ownership
 
 /**
- * @title Verifiable Draws Coordinator
+ * @title Verifiable Draws Contract
  * @author Lancelot Chardonnet
  *
- * @notice You can use this contract to create random draws
- * using the protocol defined at verifiabledraws.com/protocol
+ * @notice You can use this contract to create decentralized and verifiable random draws
+ * 
  */
 contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, ConfirmedOwner {
 
@@ -51,8 +51,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint64 publishedAt; // block number at which the draw was published on the contract
         uint64 scheduledAt; // timestamp at which the draw should be triggered
         uint256 occuredAt; // block number at which the draw has occurred
-        bytes entropy; // entropy used to pick winners
+        uint32 nbParticipants; // number of participants
+        uint32 nbWinners; // number of winners to select for this draw
         uint32 entropyNeeded; // number of bytes of information needed to compute winners
+        bytes entropy; // entropy used to pick winners
         bool entropyPending; // when the random numbers are being generated
         bool completed; // when the draw is done and entropy as been filled
     }
@@ -80,10 +82,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     uint64 private s_subscriptionId;
 
     // For other networks see https://docs.chain.link/docs/vrf-contracts/#configurations
-    address link_token_contract = 0xb0897686c545045aFc77CF20eC7A532E3120E0F1;
-    address vrfCoordinator = 0xAE975071Be8F8eE67addBC1A82488F1C24858067;
+    address link_token_contract = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
+    address vrfCoordinator = 0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed;
     // Gas lane to use, which specifies the maximum gas price to bump to
-    bytes32 keyHash = 0x6e099d640cde6de9d40ac749b4b594126b0169747122711109c9985d47751f93;
+    bytes32 keyHash = 0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f;
     
     // Depends on the number of requested values that you want sent to the
     // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
@@ -110,6 +112,8 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     function launchDraw(
         string memory cid,
         uint64 scheduledAt,
+        uint32 nbParticipants,
+        uint32 nbWinners,
         uint32 entropyNeeded
     )
         external
@@ -122,7 +126,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint64 publishedAt = uint64(block.number);
         uint256 occuredAt = 0;
         bytes memory entropy = "";
-        draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, entropy, entropyNeeded, false, false);
+        draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, nbParticipants, nbWinners, entropyNeeded, entropy, false, false);
         pendingDraws.push(cid);
         drawCount++;
         emit DrawLaunched(cid, publishedAt, scheduledAt, entropyNeeded);
@@ -327,6 +331,41 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return draws[cid].entropy;
     }
 
+    function getWinners(string memory cid) external view returns (uint32[] memory) {
+
+        require(draws[cid].entropy.length != 0, "The draw has not occured yet. Come back later.");
+
+        uint256 decimalRandomness = bytesToUint(draws[cid].entropy);
+        uint32 nbWinners = draws[cid].nbWinners;
+        uint32 nbParticipants = draws[cid].nbParticipants;
+        uint32 nbDigitsPerIndex = numDigits(nbParticipants - 1);
+        uint32 modulo = uint32(10 ** nbDigitsPerIndex);
+        uint32[] memory winnerIndexes = new uint32[](nbWinners); // Fixed sized array, all elements initialize to 0
+
+        for (uint32 i = 0; i < nbWinners; i++) {
+
+            uint32 tempIndex = uint32(decimalRandomness % modulo);
+            tempIndex = tempIndex % nbParticipants; // potentially valid index if no conflicts with other indexes
+
+            // Check conflicts with other indexes
+            while (includes(winnerIndexes, tempIndex, i)) {
+                for (uint32 j = 0; j < i; j++) {
+
+                    // Resolve conflict if any
+                    if (winnerIndexes[j] == tempIndex) {
+                        tempIndex = (tempIndex + 1) % nbParticipants;
+                    }
+                        
+                }
+            }
+
+            winnerIndexes[i] = tempIndex;
+            decimalRandomness = decimalRandomness / modulo;
+        }
+
+        return winnerIndexes;
+    }
+
     function getPendingDraws() external view onlyOwner returns (string[] memory) {
         return pendingDraws;
     }
@@ -346,12 +385,40 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return (a + m - 1) / m;
     }
 
-    function extractBytes(bytes memory data, uint32 from, uint32 n) private pure returns(bytes memory) {
+    function extractBytes(bytes memory data, uint32 from, uint32 n) private pure returns (bytes memory) {
       bytes memory returnValue = new bytes(n);
       for (uint32 i = 0; i < n + from; i++) {
         returnValue[i] = data[i + from]; 
       }
       return returnValue;
+    }
+
+    function bytesToUint(bytes memory b) internal pure returns (uint256) {
+        uint256 number;
+        for(uint i = 0; i < b.length; i++){
+            number = number + uint(uint8(b[i]))*(2**(8*(b.length-(i+1))));
+        }
+        return number;
+    }
+
+    function numDigits(uint32 number) internal pure returns (uint32) {
+        uint32 digits = 0;
+
+        while (number != 0) {
+            number /= 10;
+            digits++;
+        }
+        return digits;
+    }
+
+    function includes(uint32[] memory arr, uint32 value, uint32 untilIndex) internal pure returns (bool) {
+
+        for (uint32 i = 0; i < untilIndex; i++) {
+            if (arr[i] == value) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function removePending(string memory searchFor) internal {

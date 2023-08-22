@@ -45,7 +45,7 @@
     "@nomiclabs/hardhat-ethers": "^2.2.2",
     "@nomiclabs/hardhat-waffle": "^2.0.5",
     "@remix-project/remixd": "^0.6.11",
-    "hardhat": "^2.12.0-esm.1",
+    "hardhat": "^2.17.1",
     "hardhat-contract-sizer": "^2.8.0",
     "hardhat-gas-reporter": "^1.0.9",
     "nodemon": "^2.0.20"
