@@ -363,6 +363,11 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             decimalRandomness = decimalRandomness / modulo;
         }
 
+        // We want to display line numbers, not indexes, so all indexes need to be +1
+        for (uint32 i = 0; i < nbWinners; i++) {
+            winnerIndexes[i] += 1;
+        }
+
         return winnerIndexes;
     }
 
