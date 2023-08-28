@@ -22,17 +22,16 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     error DrawTooEarly(string cid);
     error DrawAlreadyTriggered(string cid);
     error DrawAlreadyCompleted(string cid);
-    error NoRandomWordNeeded(string[] cids);
+    error NoEntropyNeeded(string[] cids);
     error RequestDoesNotExist(uint256 id);
     error RequestAlreadyFulfilled(uint256 id);
-    error RequestFulfilledButEmpty(uint256 id);
+    error RandomnessFulfilledButEmpty(uint256 id);
 
 
     /*** Events ***/
 
     event DrawLaunched(string cid, uint64 publishedAt, uint64 scheduledAt, uint32 entropyNeeded);
-    event DrawsTriggered(string[] performData);
-    event RequestSent(
+    event RandomnessRequested(
         uint256 requestId,
         string[] cids,
         uint32 numWords,
@@ -41,8 +40,8 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint16 requestConfirmations,
         uint32 callbackGasLimit
     );
-    event RequestFulfilled(uint256 requestId, uint256[] randomWords);
-    event DrawCompleted(string cid, bytes extractedEntropy);
+    event RandomnessFulfilled(uint256 requestId, uint256[] randomWords);
+    event DrawsCompleted(string[] cids);
 
 
     /*** Draws ***/
@@ -60,20 +59,21 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     }
    
     mapping(string => Draw) private draws; // Content Identifier (CID) => Draw
-    string[] private pendingDraws; // draws for which completed = false
+    string[] private queue; // draws for which completed = false
     uint32 private drawCount = 0;
 
 
     /*** Requests ***/
 
     struct RequestStatus {
-        bool exists; // whether a requestId exists
         bool fulfilled; // whether the request has been successfully fulfilled
+        uint256 createdAt; // block timestamp
         uint256[] randomWords;
         string[] cids;
     }
 
     mapping(uint256 => RequestStatus) public s_requests; /* requestId --> requestStatus */
+    uint256[] private pendingRequests;
 
 
     /*** VRF ***/
@@ -81,20 +81,11 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     VRFCoordinatorV2Interface COORDINATOR;
     uint64 private s_subscriptionId;
 
-    // For other networks see https://docs.chain.link/docs/vrf-contracts/#configurations
+    // See https://docs.chain.link/docs/vrf-contracts/#configurations
     address link_token_contract = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
     address vrfCoordinator = 0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed;
-    // Gas lane to use, which specifies the maximum gas price to bump to
-    bytes32 keyHash = 0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f;
-    
-    // Depends on the number of requested values that you want sent to the
-    // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
-    // so 100,000 is a safe default for this contract. Test and adjust
-    // this limit based on the network that you select, the size of the request,
-    // and the processing of the callback request in the fulfillRandomWords() function.
-    uint32 callbackGasLimit = 1000000;
-
-    // The default is 3, but you can set this higher.
+    bytes32 keyHash = 0xd729dc84e21ae57ffb6be0053bf2b0668aa2aaf300a2a7b2ddf7dc0bb6e875a8;
+    uint32 callbackGasLimit = 2500000;
     uint16 requestConfirmations = 3;
 
 
@@ -127,7 +118,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint256 occuredAt = 0;
         bytes memory entropy = "";
         draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, nbParticipants, nbWinners, entropyNeeded, entropy, false, false);
-        pendingDraws.push(cid);
+        queue.push(cid);
         drawCount++;
         emit DrawLaunched(cid, publishedAt, scheduledAt, entropyNeeded);
     }
@@ -142,31 +133,31 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         returns (bool upkeepNeeded, bytes memory performData)
     {
         upkeepNeeded = false;
-        string[] memory tempDraws = new string[](pendingDraws.length);
+        bool[] memory isReady = new bool[](queue.length);
         uint32 count = 0;
 
-        for (uint64 i = 0; i < pendingDraws.length; i++) {
+        for (uint64 i = 0; i < queue.length; i++) {
 
-            string memory cid = pendingDraws[i];
+            string memory cid = queue[i];
 
             // Conditions needed in order to trigger a draw
             if (draws[cid].publishedAt > 0 && block.timestamp >= draws[cid].scheduledAt && !draws[cid].entropyPending && !draws[cid].completed) {
                 upkeepNeeded = true;
-                tempDraws[i] = cid;
+                isReady[i] = true;
                 count++;
             }
         }
 
         if (upkeepNeeded) {
             uint32 j = 0;
-            string[] memory finalDraws = new string[](count);
-            for (uint64 i = 0; i < tempDraws.length; i++) {
-                if (bytes(tempDraws[i]).length != 0) {
-                    finalDraws[j] = tempDraws[i];
+            uint32[] memory queueIdx = new uint32[](count);
+            for (uint32 i = 0; i < isReady.length; i++) {
+                if (isReady[i]) {
+                    queueIdx[j] = i;
                     j++;
                 }
             }
-            performData = abi.encode(finalDraws);
+            performData = abi.encode(queueIdx);
         }
 
         return (upkeepNeeded, performData);
@@ -179,13 +170,17 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         external
         override
     {
-        string[] memory requestedDraws = abi.decode(performData, (string[]));
+        uint32[] memory queueIdx = abi.decode(performData, (uint32[]));
+        string[] memory requestedCids = new string[](queueIdx.length);
+        uint32 totalEntropyNeeded = 0;
 
         // We revalidate the draws in the performUpkeep to prevent malicious actors
         // from calling performUpkeep with wrong parameters 
-        for (uint64 i = 0; i < requestedDraws.length; i++) {
+        for (uint64 i = 0; i < queueIdx.length; i++) {
 
-            string memory cid = requestedDraws[i];
+            string memory cid = queue[queueIdx[i]];
+            requestedCids[i] = cid;
+            
             if (draws[cid].publishedAt == 0) {
                 revert DrawDoesNotExist(cid);
             }
@@ -196,41 +191,33 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
             if (draws[cid].entropyPending) {
                 revert DrawAlreadyTriggered(cid);
-            } else {
-                draws[cid].entropyPending = true;
             }
 
             if (draws[cid].completed) {
                 revert DrawAlreadyCompleted(cid);
             }
+
+            draws[cid].entropyPending = true;
+            totalEntropyNeeded += draws[cid].entropyNeeded;
         }
 
-        emit DrawsTriggered(requestedDraws);
-        generateEntropyFor(requestedDraws);
+        if (totalEntropyNeeded == 0) {
+            revert NoEntropyNeeded(requestedCids);
+        }
+
+        removeIndexesFromArray(queue, queueIdx);
+        generateEntropyFor(requestedCids, totalEntropyNeeded);
     }
 
-    function generateEntropyFor(string[] memory triggerDraws)
+    function generateEntropyFor(string[] memory requestedCids, uint32 totalEntropyNeeded)
         private
-        returns (uint256 requestId)
     {
-        
-        uint32 totalEntropyNeeded = 0;
-        for (uint64 i = 0; i < triggerDraws.length; i++) {
-            totalEntropyNeeded += draws[triggerDraws[i]].entropyNeeded;
-        }
  
-        // Each word gives an entropy of 256 bits (see _randomWords in fulfillRandomWords)
-        // i.e. 32 bytes
-        uint32 entropyPerWord = 32;
-        // Number of random words to generate
-        uint32 numWords = divisionRoundUp(totalEntropyNeeded, entropyPerWord);
-
-        if (numWords == 0) {
-            revert NoRandomWordNeeded(triggerDraws);
-        }
+        // Each word gives an entropy of 256 bits, i.e. 32 bytes
+        uint32 numWords = divisionRoundUp(totalEntropyNeeded, 32);
 
         // Will revert if subscription is not set and funded.
-        requestId = COORDINATOR.requestRandomWords(
+        uint256 requestId = COORDINATOR.requestRandomWords(
             keyHash,
             s_subscriptionId,
             requestConfirmations,
@@ -240,22 +227,22 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
         s_requests[requestId] = RequestStatus({
             randomWords: new uint256[](0),
-            cids: triggerDraws,
-            exists: true,
-            fulfilled: false
+            cids: requestedCids,
+            fulfilled: false,
+            createdAt: block.timestamp
         });
 
-        emit RequestSent(
+        pendingRequests.push(requestId);
+
+        emit RandomnessRequested(
             requestId,
-            triggerDraws,
+            requestedCids,
             numWords,
             keyHash,
             s_subscriptionId,
             requestConfirmations,
             callbackGasLimit
         );
-
-        return requestId;
     }
 
     function fulfillRandomWords(
@@ -264,7 +251,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     ) internal override {
         RequestStatus memory request = s_requests[_requestId];
 
-        if (!request.exists) {
+        if (request.createdAt == 0) {
             revert RequestDoesNotExist(_requestId);
         }
 
@@ -273,12 +260,23 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         }
 
         if (_randomWords.length == 0) {
-            revert RequestFulfilledButEmpty(_requestId);
+            revert RandomnessFulfilledButEmpty(_requestId);
         }
 
-        request.fulfilled = true;
-        request.randomWords = _randomWords;
-        emit RequestFulfilled(_requestId, _randomWords);
+        s_requests[_requestId].fulfilled = true;
+        s_requests[_requestId].randomWords = _randomWords;
+
+        for (uint256 i = 0; i < pendingRequests.length; i++) {
+            if (pendingRequests[i] == _requestId) {
+                if (i != pendingRequests.length - 1) {
+                    pendingRequests[i] = pendingRequests[pendingRequests.length - 1];
+                }
+                
+                pendingRequests.pop();
+                break;
+            }
+        }
+        emit RandomnessFulfilled(_requestId, _randomWords);
 
         bytes memory totalEntropy = abi.encodePacked(_randomWords);
         uint32 from = 0;
@@ -289,18 +287,17 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
             if (!draws[cid].completed) {
                 bytesNeeded = draws[cid].entropyNeeded;
-                bytes memory extractedEntropy = extractBytes(totalEntropy, from, bytesNeeded);
-                draws[cid].entropy = extractedEntropy;
+                draws[cid].entropy = extractBytes(totalEntropy, from, bytesNeeded);
                 draws[cid].occuredAt = block.number;
                 draws[cid].entropyPending = false;
                 draws[cid].completed = true;
                 from += bytesNeeded;
-                removePending(cid);
-                emit DrawCompleted(cid, draws[cid].entropy);
             } else {
                 revert DrawAlreadyCompleted(cid);
             }
         }
+
+        emit DrawsCompleted(request.cids);
     }
 
 
@@ -312,7 +309,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
         RequestStatus memory request = s_requests[_requestId];
 
-        if (!request.exists) {
+        if (request.createdAt == 0) {
             revert RequestDoesNotExist(_requestId);
         }
 
@@ -323,7 +320,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return drawCount;
     }
 
-    function getDrawDetails(string memory cid) external view onlyOwner returns (Draw memory) {
+    function getDrawDetails(string memory cid) external view returns (Draw memory) {
         return draws[cid];
     }
 
@@ -333,34 +330,35 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
     function getWinners(string memory cid) external view returns (uint32[] memory) {
 
-        require(draws[cid].entropy.length != 0, "The draw has not occured yet. Come back later.");
+        bytes memory totalEntropy = draws[cid].entropy;
+        require(totalEntropy.length != 0, "The draw has not occured yet. Come back later.");
 
-        uint256 decimalRandomness = bytesToUint(draws[cid].entropy);
         uint32 nbWinners = draws[cid].nbWinners;
         uint32 nbParticipants = draws[cid].nbParticipants;
-        uint32 nbDigitsPerIndex = numDigits(nbParticipants - 1);
-        uint32 modulo = uint32(10 ** nbDigitsPerIndex);
         uint32[] memory winnerIndexes = new uint32[](nbWinners); // Fixed sized array, all elements initialize to 0
+        uint32 from = 0;
 
         for (uint32 i = 0; i < nbWinners; i++) {
 
-            uint32 tempIndex = uint32(decimalRandomness % modulo);
-            tempIndex = tempIndex % nbParticipants; // potentially valid index if no conflicts with other indexes
+            uint32 nbBytesNeeded = divisionRoundUp(uint32(log2(nbParticipants - i)), 8);
+            bytes memory extractedEntropy = extractBytes(totalEntropy, from, nbBytesNeeded);
+            from += nbBytesNeeded;
 
-            // Check conflicts with other indexes
-            while (includes(winnerIndexes, tempIndex, i)) {
-                for (uint32 j = 0; j < i; j++) {
+            uint32 randomNumber = uint32(bytesToUint(extractedEntropy));
+            randomNumber = randomNumber % (nbParticipants - i);
+            uint32 tempIndex = randomNumber;
+            uint32 min = 0;
 
-                    // Resolve conflict if any
-                    if (winnerIndexes[j] == tempIndex) {
-                        tempIndex = (tempIndex + 1) % nbParticipants;
-                    }
-                        
+            while (true) {
+                uint32 offset = nbValuesBetween(winnerIndexes, min, tempIndex);
+                if (offset == 0) {
+                    break;
                 }
+                min = tempIndex + 1;
+                tempIndex += offset;
             }
 
             winnerIndexes[i] = tempIndex;
-            decimalRandomness = decimalRandomness / modulo;
         }
 
         // We want to display line numbers, not indexes, so all indexes need to be +1
@@ -371,8 +369,8 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return winnerIndexes;
     }
 
-    function getPendingDraws() external view onlyOwner returns (string[] memory) {
-        return pendingDraws;
+    function getQueue() external view onlyOwner returns (string[] memory) {
+        return queue;
     }
 
 
@@ -391,13 +389,17 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     }
 
     function extractBytes(bytes memory data, uint32 from, uint32 n) private pure returns (bytes memory) {
-      bytes memory returnValue = new bytes(n);
-      for (uint32 i = 0; i < n + from; i++) {
-        returnValue[i] = data[i + from]; 
-      }
-      return returnValue;
+        
+        require(data.length >= from + n, "Slice out of bounds");
+        
+        bytes memory returnValue = new bytes(n);
+        for (uint32 i = 0; i < n; i++) {
+            returnValue[i] = data[from + i]; 
+        }
+        return returnValue;
     }
 
+    // See https://ethereum.stackexchange.com/a/51234
     function bytesToUint(bytes memory b) internal pure returns (uint256) {
         uint256 number;
         for(uint i = 0; i < b.length; i++){
@@ -406,32 +408,92 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return number;
     }
 
-    function numDigits(uint32 number) internal pure returns (uint32) {
-        uint32 digits = 0;
+    function nbValuesBetween(uint32[] memory arr, uint32 min, uint32 max) internal pure returns (uint32) {
+        uint32 count = 0;
 
-        while (number != 0) {
-            number /= 10;
-            digits++;
-        }
-        return digits;
-    }
-
-    function includes(uint32[] memory arr, uint32 value, uint32 untilIndex) internal pure returns (bool) {
-
-        for (uint32 i = 0; i < untilIndex; i++) {
-            if (arr[i] == value) {
-                return true;
+        for (uint32 i = 0; i < arr.length; i++) {
+            if (arr[i] >= min && arr[i] <= max) {
+                count++;
             }
         }
-        return false;
+
+        return count;
     }
 
-    function removePending(string memory searchFor) internal {
-        for (uint256 i = 0; i < pendingDraws.length; i++) {
-            if (keccak256(bytes(pendingDraws[i])) == keccak256(bytes(searchFor))) {
-                pendingDraws[i] = pendingDraws[pendingDraws.length-1];
-                pendingDraws.pop();
+    // See https://ethereum.stackexchange.com/a/30168
+    function log2(uint256 x) internal pure returns (uint256 y) {
+        assembly {
+            let arg := x
+            x := sub(x,1)
+            x := or(x, div(x, 0x02))
+            x := or(x, div(x, 0x04))
+            x := or(x, div(x, 0x10))
+            x := or(x, div(x, 0x100))
+            x := or(x, div(x, 0x10000))
+            x := or(x, div(x, 0x100000000))
+            x := or(x, div(x, 0x10000000000000000))
+            x := or(x, div(x, 0x100000000000000000000000000000000))
+            x := add(x, 1)
+            let m := mload(0x40)
+            mstore(m,           0xf8f9cbfae6cc78fbefe7cdc3a1793dfcf4f0e8bbd8cec470b6a28a7a5a3e1efd)
+            mstore(add(m,0x20), 0xf5ecf1b3e9debc68e1d9cfabc5997135bfb7a7a3938b7b606b5b4b3f2f1f0ffe)
+            mstore(add(m,0x40), 0xf6e4ed9ff2d6b458eadcdf97bd91692de2d4da8fd2d0ac50c6ae9a8272523616)
+            mstore(add(m,0x60), 0xc8c0b887b0a8a4489c948c7f847c6125746c645c544c444038302820181008ff)
+            mstore(add(m,0x80), 0xf7cae577eec2a03cf3bad76fb589591debb2dd67e0aa9834bea6925f6a4a2e0e)
+            mstore(add(m,0xa0), 0xe39ed557db96902cd38ed14fad815115c786af479b7e83247363534337271707)
+            mstore(add(m,0xc0), 0xc976c13bb96e881cb166a933a55e490d9d56952b8d4e801485467d2362422606)
+            mstore(add(m,0xe0), 0x753a6d1b65325d0c552a4d1345224105391a310b29122104190a110309020100)
+            mstore(0x40, add(m, 0x100))
+            let magic := 0x818283848586878898a8b8c8d8e8f929395969799a9b9d9e9faaeb6bedeeff
+            let shift := 0x100000000000000000000000000000000000000000000000000000000000000
+            let a := div(mul(x, magic), shift)
+            y := div(mload(add(m,sub(255,a))), shift)
+            y := add(y, mul(256, gt(arg, 0x8000000000000000000000000000000000000000000000000000000000000000)))
+        }  
+    }
+
+    // idx must be sorted in ascending order
+    function removeIndexesFromArray(string[] storage arr, uint32[] memory idx) internal {
+
+        uint32 previous = idx[0];
+        for (uint32 i = 1; i < idx.length; i++) {
+            if (previous < idx[i]) {
+                previous = idx[i];
+            } else {
+                revert("Indexes must be sorted");
             }
+        }
+        require(idx[idx.length - 1] < arr.length, "Index to remove out of bound");
+
+        uint32 stopAtIndex = uint32(arr.length - idx.length);
+        uint32 indexToMove = uint32(arr.length);
+        uint32 j = 0;
+
+        for (uint32 i = 0; i < idx.length; i++) {
+
+            if (idx[i] >= stopAtIndex) {
+                break;
+            }
+
+            indexToMove--;
+
+            while (j < idx.length) {
+                uint32 indexToRemove = idx[idx.length-j-1];
+
+                if (indexToRemove == indexToMove) {
+                    indexToMove--;
+                } else {
+                    break;
+                }
+
+                j++;
+            }
+
+            arr[idx[i]] = arr[indexToMove];
+        }
+
+        for (uint32 i = 0; i < idx.length; i++) {
+            arr.pop();
         }
     }
 
