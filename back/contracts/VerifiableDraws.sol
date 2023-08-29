@@ -350,7 +350,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             uint32 min = 0;
 
             while (true) {
-                uint32 offset = nbValuesBetween(winnerIndexes, min, tempIndex);
+                uint32 offset = nbValuesBetween(winnerIndexes, min, tempIndex, i);
                 if (offset == 0) {
                     break;
                 }
@@ -408,10 +408,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return number;
     }
 
-    function nbValuesBetween(uint32[] memory arr, uint32 min, uint32 max) internal pure returns (uint32) {
+    function nbValuesBetween(uint32[] memory arr, uint32 min, uint32 max, uint32 imax) internal pure returns (uint32) {
         uint32 count = 0;
 
-        for (uint32 i = 0; i < arr.length; i++) {
+        for (uint32 i = 0; i < imax; i++) {
             if (arr[i] >= min && arr[i] <= max) {
                 count++;
             }
