@@ -7,13 +7,13 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol"; // ChainLink VRF
 import "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol"; // Ownership
 
 /**
- * @title Verifiable Draws Smart Contract
+ * @title Random.win Smart Contract
  * @author Lancelot Chardonnet
  *
  * @notice This contract allows you to create decentralized random draws
  * 
  */
-contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, ConfirmedOwner {
+contract RandomWin is AutomationCompatibleInterface, VRFConsumerBaseV2, ConfirmedOwner {
 
     /*** Errors ***/
 
@@ -31,7 +31,6 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     /*** Events ***/
 
     event DrawLaunched(string cid, uint64 publishedAt, uint64 scheduledAt, uint32 entropyNeeded);
-    event DrawLaunchedBatch(string[] cids);
     event RandomnessRequested(
         uint256 requestId,
         string[] cids,
@@ -82,12 +81,12 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     VRFCoordinatorV2Interface COORDINATOR;
     uint64 private s_subscriptionId;
 
-    // See https://docs.chain.link/vrf/v2/subscription/supported-networks
-    address link_token_contract = 0xb1D4538B4571d411F07960EF2838Ce337FE1E80E;
-    address vrfCoordinator = 0x50d47e4142598E3411aA864e08a44284e471AC6f;
-    bytes32 keyHash = 0x027f94ff1465b3525f9fc03e9ff7d6d2c0953482246dd6ae07570c45d6631414;
+    // See https://docs.chain.link/docs/vrf-contracts/#configurations
+    address link_token_contract = 0xb0897686c545045aFc77CF20eC7A532E3120E0F1;
+    address vrfCoordinator = 0xAE975071Be8F8eE67addBC1A82488F1C24858067;
+    bytes32 keyHash = 0xd729dc84e21ae57ffb6be0053bf2b0668aa2aaf300a2a7b2ddf7dc0bb6e875a8;
     uint32 callbackGasLimit = 2500000;
-    uint16 requestConfirmations = 1;
+    uint16 requestConfirmations = 3;
 
 
     constructor (
@@ -119,80 +118,9 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint256 occuredAt = 0;
         bytes memory entropy = "";
         draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, nbParticipants, nbWinners, entropyNeeded, entropy, false, false);
+        queue.push(cid);
         drawCount++;
-
         emit DrawLaunched(cid, publishedAt, scheduledAt, entropyNeeded);
-
-        if (block.timestamp >= scheduledAt) {
-            string[] memory cids = new string[](1);
-            cids[0] = cid;
-            generateEntropyFor(cids, entropyNeeded);
-        } else {
-            queue.push(cid);
-        }
-        
-    }
-
-    function batchLaunchDraw(
-        uint32 batchSize,
-        string[] memory cidArray,
-        uint64[] memory scheduledAtArray,
-        uint32[] memory nbParticipantsArray,
-        uint32[] memory nbWinnersArray,
-        uint32[] memory entropyNeededArray
-    )
-        external
-        onlyOwner
-    {
-
-        bool[] memory isReady = new bool[](batchSize);
-        uint32 isReadyCount = 0;
-
-        for (uint32 i = 0; i < batchSize; i++) {
-
-            string memory cid = cidArray[i];
-            uint64 scheduledAt = scheduledAtArray[i];
-            uint32 nbParticipants = nbParticipantsArray[i];
-            uint32 nbWinners = nbWinnersArray[i];
-            uint32 entropyNeeded = entropyNeededArray[i];
-
-            if (draws[cid].publishedAt != 0) {
-                revert DrawAlreadyExists(cid);
-            }
-
-            uint64 publishedAt = uint64(block.number);
-            uint256 occuredAt = 0;
-            bytes memory entropy = "";
-            draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, nbParticipants, nbWinners, entropyNeeded, entropy, false, false);
-            drawCount++;
-
-            if (block.timestamp >= scheduledAt) {
-                isReady[i] = true;
-                isReadyCount++;
-            } else {
-                queue.push(cid);
-            }
-
-        }
-
-        if (isReadyCount > 0) {
-            uint32 j = 0;
-            string[] memory readyCids = new string[](isReadyCount);
-            uint32 totalEntropyNeeded = 0;
-
-            for (uint32 i = 0; i < batchSize; i++) {
-                if (isReady[i]) {
-                    readyCids[j] = cidArray[i];
-                    totalEntropyNeeded += entropyNeededArray[i];
-                    j++;
-                }
-            }
-
-            generateEntropyFor(readyCids, totalEntropyNeeded);
-        }
-
-        emit DrawLaunchedBatch(cidArray);
-        
     }
 
     function checkUpkeep(

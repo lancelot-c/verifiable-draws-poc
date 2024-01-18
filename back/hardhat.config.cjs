@@ -5,13 +5,13 @@ require("@nomiclabs/hardhat-waffle");
 require('hardhat-contract-sizer');
 require("hardhat-gas-reporter");
 require("@nomicfoundation/hardhat-verify");
-const { HARDHAT_DEFAULT_NETWORK, TESTNET_API_URL, MAINNET_API_URL, WALLET_PRIVATE_KEY, COIN_MARKETCAP_API_KEY } = process.env;
+const { HARDHAT_DEFAULT_NETWORK, TESTNET_API_URL, MAINNET_API_URL, WALLET_PRIVATE_KEY, COIN_MARKETCAP_API_KEY, ARBISCAN_API_KEY } = process.env;
 
 
 module.exports = {
     defaultNetwork: HARDHAT_DEFAULT_NETWORK,
     networks: {
-        testnet: {
+        arbitrumTestnet: {
             url      : TESTNET_API_URL,
             accounts : [`${WALLET_PRIVATE_KEY}`]
         },
@@ -21,7 +21,7 @@ module.exports = {
         }
     },
     solidity: {
-        version: "0.8.19",
+        version: "0.8.23",
         settings: {
             optimizer: {
                 enabled: true,
@@ -31,9 +31,23 @@ module.exports = {
     },
     etherscan: {
         apiKey: {
-            polygon: "78T5AVNST2G6D7XS53MP2J5EFU64S7GCPY",
-            polygonMumbai: "78T5AVNST2G6D7XS53MP2J5EFU64S7GCPY",
-        }
+            arbitrumOne: ARBISCAN_API_KEY,
+            arbitrumGoerli: ARBISCAN_API_KEY,
+            arbitrumSepolia: ARBISCAN_API_KEY,
+        },
+        customChains: [
+            {
+                network: "arbitrumSepolia",
+                chainId: 421614,
+                urls: {
+                    apiURL: "https://api-sepolia.arbiscan.io/api",
+                    browserURL: "https://sepolia.arbiscan.io/",
+                },
+            },
+        ],
+    },
+    sourcify: {
+        enabled: true,
     },
     contractSizer: {
         runOnCompile: false,
