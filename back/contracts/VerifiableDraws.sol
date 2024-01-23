@@ -105,8 +105,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         string memory cid,
         uint64 scheduledAt,
         uint32 nbParticipants,
-        uint32 nbWinners,
-        uint32 entropyNeeded
+        uint32 nbWinners
     )
         external
         onlyOwner
@@ -118,6 +117,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint64 publishedAt = uint64(block.number);
         uint256 occuredAt = 0;
         bytes memory entropy = "";
+        uint32 entropyNeeded = computeEntropyNeeded(nbParticipants, nbWinners);
         draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, nbParticipants, nbWinners, entropyNeeded, entropy, false, false);
         drawCount++;
 
@@ -138,8 +138,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         string[] memory cidArray,
         uint64[] memory scheduledAtArray,
         uint32[] memory nbParticipantsArray,
-        uint32[] memory nbWinnersArray,
-        uint32[] memory entropyNeededArray
+        uint32[] memory nbWinnersArray
     )
         external
         onlyOwner
@@ -154,7 +153,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             uint64 scheduledAt = scheduledAtArray[i];
             uint32 nbParticipants = nbParticipantsArray[i];
             uint32 nbWinners = nbWinnersArray[i];
-            uint32 entropyNeeded = entropyNeededArray[i];
+            uint32 entropyNeeded = computeEntropyNeeded(nbParticipants, nbWinners);
 
             if (draws[cid].publishedAt != 0) {
                 revert DrawAlreadyExists(cid);
@@ -183,7 +182,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             for (uint32 i = 0; i < batchSize; i++) {
                 if (isReady[i]) {
                     readyCids[j] = cidArray[i];
-                    totalEntropyNeeded += entropyNeededArray[i];
+                    totalEntropyNeeded += draws[cidArray[i]].entropyNeeded;
                     j++;
                 }
             }
@@ -287,7 +286,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         // Each word gives an entropy of 256 bits, i.e. 32 bytes
         uint32 numWords = divisionRoundUp(totalEntropyNeeded, 32);
 
-        // Will revert if subscription is not set and funded.
+        // Will revert with error NumWordsTooBig if numWords > 500, see https://sepolia.arbiscan.io/address/0x50d47e4142598e3411aa864e08a44284e471ac6f#code#F18#L384
         uint256 requestId = COORDINATOR.requestRandomWords(
             keyHash,
             s_subscriptionId,
@@ -399,13 +398,13 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return draws[cid].entropy;
     }
 
-    function checkContestWinners(string memory contest_identifier) external view returns (uint32[] memory) {
+    function checkDrawWinners(string memory draw_identifier) external view returns (uint32[] memory) {
 
-        bytes memory totalEntropy = draws[contest_identifier].entropy;
+        bytes memory totalEntropy = draws[draw_identifier].entropy;
         require(totalEntropy.length != 0, "The draw has not occured yet. Come back later.");
 
-        uint32 nbWinners = draws[contest_identifier].nbWinners;
-        uint32 nbParticipants = draws[contest_identifier].nbParticipants;
+        uint32 nbWinners = draws[draw_identifier].nbWinners;
+        uint32 nbParticipants = draws[draw_identifier].nbParticipants;
         uint32[] memory winnerIndexes = new uint32[](nbWinners); // Fixed sized array, all elements initialize to 0
         uint32 from = 0;
 
@@ -454,10 +453,25 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
     /*** Utils ***/
 
+
+    function computeEntropyNeeded(uint32 nbParticipants, uint32 nbWinners) private pure returns (uint32) {
+
+        uint32 entropyNeeded = 0;
+
+        // Optimised using Information Theory
+        for (uint32 i = 0; i < nbWinners; i++) {
+            entropyNeeded += divisionRoundUp(uint32(log2(nbParticipants - i)), 8); // in bytes
+        }
+
+        return entropyNeeded;
+    }
+
+
     // Division rounds down by default in Solidity, this function rounds up
     function divisionRoundUp(uint32 a, uint32 m) private pure returns (uint32) {
         return (a + m - 1) / m;
     }
+
 
     function extractBytes(bytes memory data, uint32 from, uint32 n) private pure returns (bytes memory) {
         
