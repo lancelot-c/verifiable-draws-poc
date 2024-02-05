@@ -454,7 +454,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     /*** Utils ***/
 
 
-    function computeEntropyNeeded(uint32 nbWinners) private pure returns (uint32) {
+    function computeEntropyNeeded(uint32 nbWinners) private view returns (uint32) {
         return nbWinners * entropyNeededPerWinner;
     }
 
