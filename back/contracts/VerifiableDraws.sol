@@ -62,6 +62,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     mapping(string => Draw) private draws; // Content Identifier (CID) => Draw
     string[] private queue; // draws for which completed = false
     uint32 private drawCount = 0;
+    uint32 private entropyNeededPerWinner = 8; // Retrieving 8 bytes (64 bits) of entropy for each winner is enough to have an infinitely small scaling bias
 
 
     /*** Requests ***/
@@ -117,7 +118,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint64 publishedAt = uint64(block.number);
         uint256 occuredAt = 0;
         bytes memory entropy = "";
-        uint32 entropyNeeded = computeEntropyNeeded(nbParticipants, nbWinners);
+        uint32 entropyNeeded = computeEntropyNeeded(nbWinners);
         draws[cid] = Draw(publishedAt, scheduledAt, occuredAt, nbParticipants, nbWinners, entropyNeeded, entropy, false, false);
         drawCount++;
 
@@ -153,7 +154,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             uint64 scheduledAt = scheduledAtArray[i];
             uint32 nbParticipants = nbParticipantsArray[i];
             uint32 nbWinners = nbWinnersArray[i];
-            uint32 entropyNeeded = computeEntropyNeeded(nbParticipants, nbWinners);
+            uint32 entropyNeeded = computeEntropyNeeded(nbWinners);
 
             if (draws[cid].publishedAt != 0) {
                 revert DrawAlreadyExists(cid);
@@ -410,9 +411,8 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
         for (uint32 i = 0; i < nbWinners; i++) {
 
-            uint32 nbBytesNeeded = divisionRoundUp(uint32(log2(nbParticipants - i)), 8);
-            bytes memory extractedEntropy = extractBytes(totalEntropy, from, nbBytesNeeded);
-            from += nbBytesNeeded;
+            bytes memory extractedEntropy = extractBytes(totalEntropy, from, entropyNeededPerWinner);
+            from += entropyNeededPerWinner;
 
             uint32 randomNumber = uint32(bytesToUint(extractedEntropy));
             randomNumber = randomNumber % (nbParticipants - i);
@@ -454,16 +454,8 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     /*** Utils ***/
 
 
-    function computeEntropyNeeded(uint32 nbParticipants, uint32 nbWinners) private pure returns (uint32) {
-
-        uint32 entropyNeeded = 0;
-
-        // Optimised using Information Theory
-        for (uint32 i = 0; i < nbWinners; i++) {
-            entropyNeeded += divisionRoundUp(uint32(log2(nbParticipants - i)), 8); // in bytes
-        }
-
-        return entropyNeeded;
+    function computeEntropyNeeded(uint32 nbWinners) private pure returns (uint32) {
+        return nbWinners * entropyNeededPerWinner;
     }
 
 
