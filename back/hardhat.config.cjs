@@ -11,7 +11,7 @@ const { HARDHAT_DEFAULT_NETWORK, TESTNET_API_URL, MAINNET_API_URL, WALLET_PRIVAT
 module.exports = {
     defaultNetwork: HARDHAT_DEFAULT_NETWORK,
     networks: {
-        arbitrumTestnet: {
+        arbitrumSepolia: {
             url      : TESTNET_API_URL,
             accounts : [`${WALLET_PRIVATE_KEY}`]
         },
@@ -26,7 +26,8 @@ module.exports = {
             optimizer: {
                 enabled: true,
                 runs: 200
-            }
+            },
+            evmVersion: "shanghai",
       }  
     },
     etherscan: {
@@ -35,16 +36,6 @@ module.exports = {
             arbitrumGoerli: ARBISCAN_API_KEY,
             arbitrumSepolia: ARBISCAN_API_KEY,
         },
-        customChains: [
-            {
-                network: "arbitrumSepolia",
-                chainId: 421614,
-                urls: {
-                    apiURL: "https://api-sepolia.arbiscan.io/api",
-                    browserURL: "https://sepolia.arbiscan.io/",
-                },
-            },
-        ],
     },
     sourcify: {
         enabled: true,
