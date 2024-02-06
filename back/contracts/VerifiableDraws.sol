@@ -482,15 +482,6 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         return bytes8(bytes.concat(data[from + 0], data[from + 1], data[from + 2], data[from + 3], data[from + 4], data[from + 5], data[from + 6], data[from + 7]));
     }
 
-    // See https://ethereum.stackexchange.com/a/51234
-    function bytesToUint(bytes memory b) internal pure returns (uint256) {
-        uint256 number;
-        for(uint i = 0; i < b.length; i++){
-            number = number + uint(uint8(b[i]))*(2**(8*(b.length-(i+1))));
-        }
-        return number;
-    }
-
     function nbValuesBetween(uint32[] memory arr, uint32 min, uint32 max, uint32 imax) internal pure returns (uint32) {
         uint32 count = 0;
 
