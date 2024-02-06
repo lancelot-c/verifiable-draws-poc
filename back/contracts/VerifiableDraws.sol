@@ -411,11 +411,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
 
         for (uint32 i = 0; i < nbWinners; i++) {
 
-            bytes memory extractedEntropy = extractBytes(totalEntropy, from, entropyNeededPerWinner);
+            bytes8 extractedEntropy = extractBytes8(totalEntropy, from);
             from += entropyNeededPerWinner;
 
-            uint32 randomNumber = uint32(bytesToUint(extractedEntropy));
-            randomNumber = randomNumber % (nbParticipants - i);
+            uint32 randomNumber = uint32(uint64(extractedEntropy) % uint64(nbParticipants - i));
             uint32 tempIndex = randomNumber;
             uint32 min = 0;
 
@@ -474,6 +473,13 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             returnValue[i] = data[from + i]; 
         }
         return returnValue;
+    }
+
+    function extractBytes8(bytes memory data, uint32 from) private pure returns (bytes8) {
+        
+        require(data.length >= from + 8, "Slice out of bounds");
+
+        return bytes8(bytes.concat(data[from + 0], data[from + 1], data[from + 2], data[from + 3], data[from + 4], data[from + 5], data[from + 6], data[from + 7]));
     }
 
     // See https://ethereum.stackexchange.com/a/51234
