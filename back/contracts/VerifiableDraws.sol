@@ -415,19 +415,23 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             from += entropyNeededPerWinner;
 
             uint32 randomNumber = uint32(uint64(extractedEntropy) % uint64(nbParticipants - i));
-            uint32 tempIndex = randomNumber;
+            uint32 nextWinningIndex = randomNumber;
             uint32 min = 0;
 
+            // Once a participant has been selected as a winner, it can never be selected again for that draw.
+            // We enforce that by looping over all participants and ignoring those who are already known winners.
+            // The offset variable keeps track of how many participants are ignored as we loop through the list and increments the next winning index accordingly.
+            // When there is no more participants to ignore (offset == 0), it means we have reached the proper winning index so we break the loop and save this index.
             while (true) {
-                uint32 offset = nbValuesBetween(winnerIndexes, min, tempIndex, i);
+                uint32 offset = nbValuesBetween(winnerIndexes, min, nextWinningIndex, i);
                 if (offset == 0) {
                     break;
                 }
-                min = tempIndex + 1;
-                tempIndex += offset;
+                min = nextWinningIndex + 1;
+                nextWinningIndex += offset;
             }
 
-            winnerIndexes[i] = tempIndex;
+            winnerIndexes[i] = nextWinningIndex;
         }
 
         // We want to display line numbers, not indexes, so all indexes need to be +1
