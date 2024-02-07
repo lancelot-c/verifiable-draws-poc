@@ -414,6 +414,9 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             bytes8 extractedEntropy = extractBytes8(totalEntropy, from);
             from += entropyNeededPerWinner;
 
+            // When i winners are already selected, we only need a random number between 0 and nbParticipants - i - 1 to select the next winner.
+            // ⚠️ Using 64-bit integers for the modulo operation is extremely important to prevent scaling bias ⚠️
+            // Then it is fine to convert the result to a 32-bit integer because we know that the output of the modulo will always be stricly less than nbParticipants which is a 32-bit integer
             uint32 randomNumber = uint32(uint64(extractedEntropy) % uint64(nbParticipants - i));
             uint32 nextWinningIndex = randomNumber;
             uint32 min = 0;
