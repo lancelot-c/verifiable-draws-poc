@@ -6,11 +6,11 @@
   "scripts": {
     "start": "node ./server/index.js",
     "dev": "nodemon ./server/index.js",
-    "deploy-contract-testnet": "npx hardhat run --network testnet scripts/deployContract.js",
+    "deploy-contract-testnet": "npx hardhat run --network arbitrumSepolia scripts/deployContract.js",
     "deploy-contract-mainnet": "npx hardhat run --network mainnet scripts/deployContract.js",
-    "launch-draw-testnet": "npx hardhat run --network testnet scripts/launchDraw.js",
+    "launch-draw-testnet": "npx hardhat run --network arbitrumSepolia scripts/launchDraw.js",
     "launch-draw-mainnet": "npx hardhat run --network mainnet scripts/launchDraw.js",
-    "batch-launch-draw-testnet": "npx hardhat run --network testnet scripts/batchLaunchDraw.js",
+    "batch-launch-draw-testnet": "npx hardhat run --network arbitrumSepolia scripts/batchLaunchDraw.js",
     "size": "npx hardhat size-contracts",
     "compile": "npx hardhat compile",
     "test": "echo \"Error: no test specified\" && exit 1"

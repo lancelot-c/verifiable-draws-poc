@@ -22,7 +22,6 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     error DrawTooEarly(string cid);
     error DrawAlreadyTriggered(string cid);
     error DrawAlreadyCompleted(string cid);
-    error NoEntropyNeeded(string[] cids);
     error RequestDoesNotExist(uint256 id);
     error RequestAlreadyFulfilled(uint256 id);
     error RandomnessFulfilledButEmpty(uint256 id);
@@ -34,7 +33,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     event DrawLaunchedBatch(string[] cids);
     event RandomnessRequested(
         uint256 requestId,
-        string[] cids,
+        string cid,
         uint32 numWords,
         bytes32 keyHash,
         uint64 s_subscriptionId,
@@ -42,7 +41,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint32 callbackGasLimit
     );
     event RandomnessFulfilled(uint256 requestId, uint256[] randomWords);
-    event DrawsCompleted(string[] cids);
+    event DrawCompleted(string cid);
 
 
     /*** Draws ***/
@@ -71,11 +70,10 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         bool fulfilled; // whether the request has been successfully fulfilled
         uint256 createdAt; // block timestamp
         uint256[] randomWords;
-        string[] cids;
+        string cid;
     }
 
     mapping(uint256 => RequestStatus) public s_requests; /* requestId --> requestStatus */
-    uint256[] private pendingRequests;
 
 
     /*** VRF ***/
@@ -127,7 +125,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         if (block.timestamp >= scheduledAt) {
             string[] memory cids = new string[](1);
             cids[0] = cid;
-            generateEntropyFor(cids, entropyNeeded);
+            generateEntropyFor(cids);
         } else {
             queue.push(cid);
         }
@@ -178,17 +176,15 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         if (isReadyCount > 0) {
             uint32 j = 0;
             string[] memory readyCids = new string[](isReadyCount);
-            uint32 totalEntropyNeeded = 0;
 
             for (uint32 i = 0; i < batchSize; i++) {
                 if (isReady[i]) {
                     readyCids[j] = cidArray[i];
-                    totalEntropyNeeded += draws[cidArray[i]].entropyNeeded;
                     j++;
                 }
             }
 
-            generateEntropyFor(readyCids, totalEntropyNeeded);
+            generateEntropyFor(readyCids);
         }
 
         emit DrawLaunchedBatch(cidArray);
@@ -243,7 +239,6 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
     {
         uint32[] memory queueIdx = abi.decode(performData, (uint32[]));
         string[] memory requestedCids = new string[](queueIdx.length);
-        uint32 totalEntropyNeeded = 0;
 
         // We revalidate the draws in the performUpkeep to prevent malicious actors
         // from calling performUpkeep with wrong parameters 
@@ -269,51 +264,52 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             }
 
             draws[cid].entropyPending = true;
-            totalEntropyNeeded += draws[cid].entropyNeeded;
-        }
-
-        if (totalEntropyNeeded == 0) {
-            revert NoEntropyNeeded(requestedCids);
         }
 
         removeIndexesFromArray(queue, queueIdx);
-        generateEntropyFor(requestedCids, totalEntropyNeeded);
+        generateEntropyFor(requestedCids);
     }
 
-    function generateEntropyFor(string[] memory requestedCids, uint32 totalEntropyNeeded)
+    function generateEntropyFor(string[] memory requestedCids)
         private
     {
+
+        for (uint32 i = 0; i < requestedCids.length; i++) {
+
+            string memory cid = requestedCids[i];
+            uint32 entropyNeeded = draws[cid].entropyNeeded;
+
+            // Each word gives an entropy of 32 bytes
+            uint32 numWords = divisionRoundUp(entropyNeeded, 32);
+
+            // Will revert with error NumWordsTooBig if numWords > 500, see https://sepolia.arbiscan.io/address/0x50d47e4142598e3411aa864e08a44284e471ac6f#code#F18#L384
+            uint256 requestId = COORDINATOR.requestRandomWords(
+                keyHash,
+                s_subscriptionId,
+                requestConfirmations,
+                callbackGasLimit,
+                numWords
+            );
+
+            s_requests[requestId] = RequestStatus({
+                randomWords: new uint256[](0),
+                cid: cid,
+                fulfilled: false,
+                createdAt: block.timestamp
+            });
+
+            emit RandomnessRequested(
+                requestId,
+                cid,
+                numWords,
+                keyHash,
+                s_subscriptionId,
+                requestConfirmations,
+                callbackGasLimit
+            );
+
+        }
  
-        // Each word gives an entropy of 256 bits, i.e. 32 bytes
-        uint32 numWords = divisionRoundUp(totalEntropyNeeded, 32);
-
-        // Will revert with error NumWordsTooBig if numWords > 500, see https://sepolia.arbiscan.io/address/0x50d47e4142598e3411aa864e08a44284e471ac6f#code#F18#L384
-        uint256 requestId = COORDINATOR.requestRandomWords(
-            keyHash,
-            s_subscriptionId,
-            requestConfirmations,
-            callbackGasLimit,
-            numWords
-        );
-
-        s_requests[requestId] = RequestStatus({
-            randomWords: new uint256[](0),
-            cids: requestedCids,
-            fulfilled: false,
-            createdAt: block.timestamp
-        });
-
-        pendingRequests.push(requestId);
-
-        emit RandomnessRequested(
-            requestId,
-            requestedCids,
-            numWords,
-            keyHash,
-            s_subscriptionId,
-            requestConfirmations,
-            callbackGasLimit
-        );
     }
 
     function fulfillRandomWords(
@@ -321,6 +317,7 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint256[] memory _randomWords
     ) internal override {
         RequestStatus memory request = s_requests[_requestId];
+        string memory cid = request.cid;
 
         if (request.createdAt == 0) {
             revert RequestDoesNotExist(_requestId);
@@ -334,41 +331,22 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
             revert RandomnessFulfilledButEmpty(_requestId);
         }
 
+        if (draws[cid].completed) {
+            revert DrawAlreadyCompleted(cid);
+        }
+
         s_requests[_requestId].fulfilled = true;
         s_requests[_requestId].randomWords = _randomWords;
-
-        for (uint256 i = 0; i < pendingRequests.length; i++) {
-            if (pendingRequests[i] == _requestId) {
-                if (i != pendingRequests.length - 1) {
-                    pendingRequests[i] = pendingRequests[pendingRequests.length - 1];
-                }
-                
-                pendingRequests.pop();
-                break;
-            }
-        }
         emit RandomnessFulfilled(_requestId, _randomWords);
 
         bytes memory totalEntropy = abi.encodePacked(_randomWords);
-        uint32 from = 0;
-        uint32 bytesNeeded = 0;
 
-        for (uint64 i = 0; i < request.cids.length; i++) {
-            string memory cid = request.cids[i];
-
-            if (!draws[cid].completed) {
-                bytesNeeded = draws[cid].entropyNeeded;
-                draws[cid].entropy = extractBytes(totalEntropy, from, bytesNeeded);
-                draws[cid].occuredAt = block.number;
-                draws[cid].entropyPending = false;
-                draws[cid].completed = true;
-                from += bytesNeeded;
-            } else {
-                revert DrawAlreadyCompleted(cid);
-            }
-        }
-
-        emit DrawsCompleted(request.cids);
+        draws[cid].entropy = extractBytes(totalEntropy, 0, draws[cid].entropyNeeded);
+        draws[cid].occuredAt = block.number;
+        draws[cid].entropyPending = false;
+        draws[cid].completed = true;
+        
+        emit DrawCompleted(cid);
     }
 
 
