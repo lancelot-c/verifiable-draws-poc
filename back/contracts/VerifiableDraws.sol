@@ -107,7 +107,6 @@ contract VerifiableDraws is AutomationCompatibleInterface, VRFConsumerBaseV2, Co
         uint32 nbWinners
     )
         external
-        onlyOwner
     {
         if (draws[cid].publishedAt != 0) {
             revert DrawAlreadyExists(cid);
